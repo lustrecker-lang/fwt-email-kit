@@ -139,10 +139,12 @@ Already done for this project, but for the record — or to stand up a second on
    it. That creates the `email_templates` table, the row-level security
    policies, and the public `email-assets` bucket.
 
-   > Re-run it if your bucket predates document upload. The bucket originally
-   > allowed image types only, at 5 MB, so a PDF came back as a mime error. The
-   > script is idempotent — the `on conflict do update` widens the existing
-   > bucket in place and touches no stored file.
+   > **Re-run it on an existing project** to pick up two later additions:
+   > document upload (the bucket originally allowed images only, at 5 MB, so a
+   > PDF came back as a mime error) and the `font` column on `project_brands`.
+   > The script is idempotent — `on conflict do update` widens the bucket in
+   > place, `add column if not exists` adds the column, and no stored file or row
+   > is touched.
 3. **Authentication → Sign In / Providers → Email → turn off "Allow new users to
    sign up".** The policies grant write access to any signed-in user, so leaving
    sign-ups open would let anyone register and edit your templates.
@@ -160,7 +162,8 @@ every policy, and that file is served to the browser.
 
 ## Using it
 
-1. **Pick a project** in the toolbar. Colours and logo swap; the layout does not.
+1. **Pick a project** in the toolbar. Colours, logo and typeface swap; the
+   layout does not.
 2. **Start from** a preset, or build from nothing.
 3. **Click a section** on the left to add it to the bottom of the email.
 4. **Drag the ⠿ handle** to move a section up or down. A blue line shows where
@@ -212,6 +215,78 @@ Project defaults are taken from each app's real brand tokens:
 > uses a deepened version of the same hue and the pale original becomes
 > `brandSoft`. If the council insists on the literal coral, change `brandText`
 > to a dark ink rather than shipping white-on-pale.
+
+---
+
+## Typeface
+
+Each project picks a font in **Projects → (a project) → Typeface**. The choice
+applies to every template in that project; there is no per-email font, for the
+same reason there is no per-email colour.
+
+Seven stacks ship, all made of faces already installed on Windows and macOS:
+
+| Choice | Why you'd pick it |
+| --- | --- |
+| **System** (default) | Matches whatever the recipient is reading on — Segoe on Windows, San Francisco on Apple, Roboto on Android. Never looks dated. |
+| **Helvetica / Arial** | The neutral grotesque. Near-identical everywhere, and the safest possible choice. |
+| **Verdana** | Wide and open, designed for screens. The most legible at small sizes — worth it where the audience skews older. |
+| **Tahoma** | Verdana's narrower sibling. More words per line, nearly as clear. |
+| **Trebuchet MS** | Humanist and slightly warmer. Reads less institutional. |
+| **Georgia** | A screen serif with real authority. Suits decisions, determinations, anything quasi-legal. |
+| **Times New Roman** | Traditional and formal. Reads as a printed letter, which is occasionally the point. |
+
+The settings screen shows a specimen in the actual face and re-renders the live
+preview, so you can judge it before saving.
+
+**There is deliberately no option to load a brand web font.** It is not an
+oversight, and adding one would make things worse rather than better:
+
+- Gmail ignores a custom font declaration in its web interface, so for most of
+  any government mailing list the font would always be the fallback.
+- Outlook on Windows renders through the Word engine and never loads a web font
+  at all. Given a stack it does not understand, it historically dropped to Times
+  New Roman.
+- Apple Mail on macOS and iOS renders them properly. Most other major clients —
+  Gmail, Outlook, Yahoo — do not.
+
+So a brand font buys you the Apple Mail slice and a second, visually different
+email for everyone else. The failure mode is not "unbranded but fine", it is a
+serif where you designed a sans. A local stack renders the same everywhere,
+which for transactional mail is worth more than the exact typeface.
+
+If a council ever insists, the groundwork is here: the stacks live in one place
+and every block already reads the resolved value, so adding a web font means
+adding a `url` alongside a stack and emitting a `<link>` in the shell — see
+option B in the commit history. Sources:
+[Gmail and custom fonts](https://scalero.io/company/blog/email-typography-what-renders-esp-limitations),
+[the 2026 support matrix](https://min8t.hashnode.dev/web-safe-fonts-for-email-the-real-support-matrix-in-2026),
+[which clients honour web fonts](https://support.omnisend.com/en/articles/1061830-email-safe-fonts).
+*Content rephrased for compliance with licensing restrictions.*
+
+### Changing a project's font
+
+Saved templates keep a rendered copy of their HTML alongside the composition, so
+the stored copy goes stale when you switch font. Hit **Re-render templates** on
+the project settings screen afterwards — same as for a colour change.
+
+### Adding a stack
+
+Append to `FONT_STACKS` in `theme.js` and it appears in project settings with no
+further wiring:
+
+```js
+palatino: {
+    label: 'Palatino (serif)',
+    stack: "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif",
+    note: 'Shown under the label on the settings screen.'
+}
+```
+
+Two rules. **End every stack in a generic family** (`sans-serif` or `serif`), or
+a client with none of your faces picks one for you. And **quote any multi-word
+family name**, because an unquoted one is invalid in the inline `style`
+attribute every block emits.
 
 ---
 
@@ -301,7 +376,7 @@ the real, suffixed names, so copy from there rather than guessing.
 | `index.html` | The composer. Build, theme, upload, save, export. Nothing brand-specific lives here. |
 | `library.html` | The shared read-only link. Browse, preview, copy HTML, read merge fields. |
 | `blocks.js` | **The catalogue.** Every section, plus the document shell and the variable extractor. Edit this to add a section. |
-| `theme.js` | Colour roles, per-project themes, the type scale, layout constants, status tones, and the block-authoring helpers. |
+| `theme.js` | Colour roles, font stacks, per-project themes, the type scale, layout constants, status tones, and the block-authoring helpers. |
 | `api.js` | Supabase access — auth, templates, uploads and the allow-list they are checked against. Plain `fetch`, no SDK. |
 | `config.js` | Project URL and publishable key. Safe to commit. |
 | `supabase/schema.sql` | The whole backend: one table, its policies, one bucket. |
@@ -392,8 +467,9 @@ Email HTML is not web HTML, and the constraints are not optional:
 - **102 KB.** Gmail clips past roughly this, hiding your footer behind a "View
   entire message" link. The composer shows live document size and warns before
   you cross it. A typical composition lands near 10 KB.
-- **No web fonts.** The stack is system-native. Custom fonts fail silently in
-  Outlook and Gmail's app, and the fallback is what most people will see anyway.
+- **No web fonts.** Locally installed faces only — see
+  [Typeface](#typeface) below. Custom fonts fail silently in Outlook and Gmail,
+  and the fallback is what most people would see anyway.
 
 ---
 

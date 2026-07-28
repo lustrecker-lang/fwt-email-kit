@@ -150,6 +150,15 @@
     .fields .row { display: flex; align-items: center; gap: 9px; }
     .fields .row label { font-size: 12.5px; color: var(--muted); min-width: 84px; }
     .fields .row input[type="text"] { flex: 1; max-width: none; }
+    .fields .row select { flex: 1; max-width: none; }
+    .fnote { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.55; }
+    /* Set in the chosen stack, so the choice is legible before it is saved. */
+    .specimen {
+        border: 1px solid var(--line); border-radius: 8px; padding: 13px 15px;
+        background: var(--panel);
+    }
+    .specimen .sd { font-size: 21px; font-weight: 700; letter-spacing: -0.3px; }
+    .specimen .sb { font-size: 13.5px; line-height: 1.6; margin-top: 5px; color: var(--muted); }
     .swatches { display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 12px 20px; }
     .sw { display: flex; align-items: center; gap: 9px; }
     .sw input[type="color"] {
@@ -355,6 +364,20 @@
                     <input type="number" id="bLogoW" min="60" max="280" step="10" style="max-width:84px">
                     <span style="font-size:12px;color:var(--muted)">px</span>
                 </div>
+            </div>
+            <h5>Typeface</h5>
+            <div class="fields">
+                <div class="row">
+                    <label for="bFont">Font</label>
+                    <select id="bFont"></select>
+                </div>
+                <p class="fnote" id="bFontNote"></p>
+                <div class="specimen" id="bFontSpecimen" aria-hidden="true"></div>
+                <p class="fnote">
+                    All locally installed faces, so every recipient sees the same thing.
+                    Brand web fonts are deliberately absent — Gmail ignores them and Outlook
+                    on Windows cannot load them, so most people would get the fallback anyway.
+                </p>
             </div>
             <h5>Colours</h5>
             <div class="swatches" id="bSwatches"></div>
@@ -845,10 +868,14 @@ function renderProjectList() {
             ? '<img src="' + t.logoUrl + '" alt="">'
             : '<span>no logo</span>';
         var n = counts[p.key];
+        /* Only surface the typeface when it deviates from the default — a row
+         * saying "System" on all four projects is noise. */
+        var ft = t.fontKey !== DEFAULT_FONT && FONT_STACKS[t.fontKey]
+            ? ' · ' + FONT_STACKS[t.fontKey].label : '';
         return '<div class="pcard" data-brand="' + p.key + '">' +
             '<div class="logo">' + logo + '</div>' +
             '<div class="info"><b>' + t.label + '</b>' +
-                '<small>' + t.brandName + (n ? ' · ' + n + ' template' + (n === 1 ? '' : 's') : '') + '</small></div>' +
+                '<small>' + t.brandName + ft + (n ? ' · ' + n + ' template' + (n === 1 ? '' : 's') : '') + '</small></div>' +
             '<div class="strip">' +
                 '<i style="background:' + t.brand + '"></i>' +
                 '<i style="background:' + t.pageBg + '"></i>' +
@@ -869,7 +896,7 @@ function openBrand(key) {
     var t = makeTheme(key);
     brandDraft = {
         key: key, brand_name: t.brandName, logo_url: t.logoUrl || '',
-        logo_width: t.logoWidth, colors: {}
+        logo_width: t.logoWidth, font: t.fontKey, colors: {}
     };
     var saved = BRAND_OVERRIDES[key];
     if (saved && saved.colors) {
@@ -881,8 +908,31 @@ function openBrand(key) {
     document.getElementById('bLogo').value = brandDraft.logo_url;
     document.getElementById('bLogoW').value = brandDraft.logo_width;
     document.getElementById('brandStatus').textContent = '';
+    renderFontChoices();
     renderBrandSwatches();
     renderBrandPreview();
+}
+
+/* The picker is built from FONT_STACKS, so adding a stack in theme.js puts it
+ * on this screen with no further wiring. */
+function renderFontChoices() {
+    var sel = document.getElementById('bFont');
+    sel.innerHTML = Object.keys(FONT_STACKS).map(function (k) {
+        return '<option value="' + k + '"' + (k === brandDraft.font ? ' selected' : '') + '>' +
+            esc(FONT_STACKS[k].label) + '</option>';
+    }).join('');
+    renderFontSpecimen();
+}
+
+function renderFontSpecimen() {
+    var spec = FONT_STACKS[brandDraft.font] || FONT_STACKS[DEFAULT_FONT];
+    document.getElementById('bFontNote').textContent = spec.note;
+    document.getElementById('bFontSpecimen').innerHTML =
+        '<div class="sd" style="font-family:' + spec.stack + '">' +
+            esc(brandDraft.brand_name || 'Your application has been approved') + '</div>' +
+        '<div class="sb" style="font-family:' + spec.stack + '">' +
+            'Hi Andrea, your registration is confirmed. ' +
+            'Reference ABC-12345 &nbsp;·&nbsp; 0123456789' + '</div>';
 }
 
 /* The draft is applied through the same override path the real thing uses, so
@@ -923,7 +973,14 @@ document.getElementById('bSwatches').addEventListener('input', function (e) {
 });
 
 document.getElementById('bName').addEventListener('input', function (e) {
-    brandDraft.brand_name = e.target.value; renderBrandPreview();
+    brandDraft.brand_name = e.target.value;
+    renderFontSpecimen();
+    renderBrandPreview();
+});
+document.getElementById('bFont').addEventListener('change', function (e) {
+    brandDraft.font = e.target.value;
+    renderFontSpecimen();
+    renderBrandPreview();
 });
 document.getElementById('bLogo').addEventListener('input', function (e) {
     brandDraft.logo_url = e.target.value.trim(); renderBrandPreview();

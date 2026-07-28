@@ -31,6 +31,7 @@ var THEMES = {
         brandName: 'eGovern',
         logoUrl: '',
         logoWidth: 130,
+        font: 'system',
         color: {
             brand: '#222222', brandText: '#ffffff', brandSoft: '#f0f0f0',
             pageBg: '#f7f7f7', cardBg: '#ffffff',
@@ -45,6 +46,7 @@ var THEMES = {
          * absolute https URL before it will render in a mail client. */
         logoUrl: '',
         logoWidth: 150,
+        font: 'system',
         color: {
             /* Brand coral is #d3b0a1 — far too pale to carry white button text,
              * so the CTA uses a deepened version of the same hue and the pale
@@ -61,6 +63,7 @@ var THEMES = {
         /* one-gov/public/transparentlogo.png */
         logoUrl: '',
         logoWidth: 140,
+        font: 'system',
         color: {
             brand: '#23395d', brandText: '#ffffff', brandSoft: '#eaeff7',
             pageBg: '#f5f6f8', cardBg: '#ffffff',
@@ -73,6 +76,7 @@ var THEMES = {
         brandName: 'Barbados SmartFinance',
         logoUrl: '',
         logoWidth: 150,
+        font: 'system',
         color: {
             brand: '#00267f', brandText: '#ffffff', brandSoft: '#e8ecf9',
             pageBg: '#f5f6f9', cardBg: '#ffffff',
@@ -96,13 +100,67 @@ var TYPE = {
     label:   { size: '11px', line: '16px', weight: '700', track: '0.8px' }
 };
 
+/* ------------------------------------------------------------ font stacks */
+/* Deliberately no web fonts. Gmail ignores a @font-face declaration outright
+ * and Outlook on Windows renders through the Word engine, which never loads
+ * one — between them that is most of any government mailing list, so the
+ * fallback is what most people would actually see. A stack of locally
+ * installed faces renders identically everywhere instead.
+ *
+ * Every stack ends in a generic family, and contains only faces that ship with
+ * both Windows and macOS, so nothing can drop to Times New Roman by surprise.
+ * `sample` is the specimen shown next to the label in project settings. */
+var FONT_STACKS = {
+    system: {
+        label: 'System (default)',
+        stack: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif",
+        note: 'Matches whatever the recipient is reading on, so it never looks dated. Segoe on Windows, San Francisco on Apple, Roboto on Android.'
+    },
+    helvetica: {
+        label: 'Helvetica / Arial',
+        stack: "Helvetica, Arial, sans-serif",
+        note: 'The neutral grotesque. Identical almost everywhere, and the safest possible choice.'
+    },
+    verdana: {
+        label: 'Verdana',
+        stack: "Verdana, Geneva, sans-serif",
+        note: 'Wide and open, designed for screens. The most legible option at small sizes — worth it where the audience skews older.'
+    },
+    tahoma: {
+        label: 'Tahoma',
+        stack: "Tahoma, Verdana, Geneva, sans-serif",
+        note: 'Verdana’s narrower sibling. Fits more words per line without losing much clarity.'
+    },
+    trebuchet: {
+        label: 'Trebuchet MS',
+        stack: "'Trebuchet MS', 'Lucida Grande', 'Lucida Sans Unicode', sans-serif",
+        note: 'Humanist and slightly warmer than the grotesques. Reads less institutional.'
+    },
+    georgia: {
+        label: 'Georgia (serif)',
+        stack: "Georgia, 'Times New Roman', Times, serif",
+        note: 'A screen serif with real authority. Suits decisions, determinations and anything quasi-legal.'
+    },
+    times: {
+        label: 'Times New Roman (serif)',
+        stack: "'Times New Roman', Times, serif",
+        note: 'Traditional and formal. Reads as a printed letter, which is occasionally the point.'
+    }
+};
+
+var DEFAULT_FONT = 'system';
+
+function fontStack(key) {
+    return (FONT_STACKS[key] || FONT_STACKS[DEFAULT_FONT]).stack;
+}
+
 var LAYOUT = {
     width: 600,
     radius: 16,       /* the card */
     radiusSm: 12,     /* panels inside the card */
     radiusBtn: 8,
     pad: 40,          /* horizontal padding inside the card (24 on mobile) */
-    font: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    font: FONT_STACKS[DEFAULT_FONT].stack
 };
 
 /* Status tones. Flat tints, no borders — the border is what made the old set
@@ -135,6 +193,7 @@ function makeTheme(key) {
         brandName: src.brandName,
         logoUrl: src.logoUrl,
         logoWidth: src.logoWidth,
+        fontKey: src.font || DEFAULT_FONT,
         type: TYPE,
         tones: TONES
     };
@@ -150,10 +209,16 @@ function makeTheme(key) {
         if (ov.brand_name) t.brandName = ov.brand_name;
         if (ov.logo_url != null) t.logoUrl = ov.logo_url;
         if (ov.logo_width) t.logoWidth = ov.logo_width;
+        if (ov.font) t.fontKey = ov.font;
         for (var k in (ov.colors || {})) {
             if (Object.prototype.hasOwnProperty.call(ov.colors, k)) t[k] = ov.colors[k];
         }
     }
+
+    /* Resolved last, so it wins over the LAYOUT copy above and reflects a
+     * saved override. An unknown key falls back rather than emitting an empty
+     * font-family, which would leave the client to pick for us. */
+    t.font = fontStack(t.fontKey);
     return t;
 }
 
