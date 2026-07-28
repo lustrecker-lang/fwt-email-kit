@@ -1,0 +1,140 @@
+-- eGovern Email Kit — full backend schema.
+-- Paste this whole file into the Supabase SQL Editor and run it once.
+-- Safe to re-run: every statement is guarded.
+
+-- =========================================================== templates table
+
+create table if not exists email_templates (
+    id                  uuid primary key default gen_random_uuid(),
+    project             text not null,          -- 'nursing' | 'onegov' | 'smartfinance' | 'egovern'
+    name                text not null,          -- 'Application approved'
+    description         text,
+    composition         jsonb not null,         -- block list + theme overrides, so it reopens in the composer
+    html                text not null,          -- rendered output, ready to paste into SendGrid
+    variables           text[] not null default '{}',
+    sendgrid_template_id text,                  -- filled in later by the sync script
+    created_at          timestamptz not null default now(),
+    updated_at          timestamptz not null default now()
+);
+
+-- One name per project, so saving the same template twice updates rather than duplicates.
+create unique index if not exists email_templates_project_name_idx
+    on email_templates (project, name);
+
+create index if not exists email_templates_project_idx
+    on email_templates (project);
+
+-- Keep updated_at honest.
+create or replace function set_updated_at()
+returns trigger language plpgsql as $$
+begin
+    new.updated_at = now();
+    return new;
+end $$;
+
+drop trigger if exists email_templates_set_updated_at on email_templates;
+create trigger email_templates_set_updated_at
+    before update on email_templates
+    for each row execute function set_updated_at();
+
+-- ===================================================================== RLS
+-- Reading is open to everyone — that is the point of the shared link.
+-- Writing requires a signed-in user. Combined with sign-ups being disabled
+-- (step 3 in the README), that means you and nobody else.
+
+alter table email_templates enable row level security;
+
+drop policy if exists "Anyone can read templates" on email_templates;
+create policy "Anyone can read templates"
+    on email_templates for select
+    using (true);
+
+drop policy if exists "Signed-in users can insert templates" on email_templates;
+create policy "Signed-in users can insert templates"
+    on email_templates for insert to authenticated
+    with check (true);
+
+drop policy if exists "Signed-in users can update templates" on email_templates;
+create policy "Signed-in users can update templates"
+    on email_templates for update to authenticated
+    using (true) with check (true);
+
+drop policy if exists "Signed-in users can delete templates" on email_templates;
+create policy "Signed-in users can delete templates"
+    on email_templates for delete to authenticated
+    using (true);
+
+-- ============================================================ project brands
+-- Per-project branding: logo, display name, colour-role overrides.
+-- The defaults live in theme.js; a row here overrides them for one project,
+-- and every template in that project picks the change up.
+
+create table if not exists project_brands (
+    key         text primary key,          -- 'nursing' | 'onegov' | 'smartfinance' | 'egovern'
+    brand_name  text,
+    logo_url    text,
+    logo_width  integer,
+    colors      jsonb not null default '{}'::jsonb,
+    updated_at  timestamptz not null default now()
+);
+
+drop trigger if exists project_brands_set_updated_at on project_brands;
+create trigger project_brands_set_updated_at
+    before update on project_brands
+    for each row execute function set_updated_at();
+
+alter table project_brands enable row level security;
+
+-- Read is public so the shared library renders every project correctly.
+drop policy if exists "Anyone can read project brands" on project_brands;
+create policy "Anyone can read project brands"
+    on project_brands for select
+    using (true);
+
+drop policy if exists "Signed-in users can insert project brands" on project_brands;
+create policy "Signed-in users can insert project brands"
+    on project_brands for insert to authenticated
+    with check (true);
+
+drop policy if exists "Signed-in users can update project brands" on project_brands;
+create policy "Signed-in users can update project brands"
+    on project_brands for update to authenticated
+    using (true) with check (true);
+
+drop policy if exists "Signed-in users can delete project brands" on project_brands;
+create policy "Signed-in users can delete project brands"
+    on project_brands for delete to authenticated
+    using (true);
+
+-- ================================================================== storage
+-- Public bucket: uploaded images need a permanent, publicly reachable URL,
+-- because mail clients cannot load anything else.
+-- SVG is deliberately excluded — Outlook and several Android clients won't render it.
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+    'email-assets',
+    'email-assets',
+    true,
+    5242880,                                     -- 5 MB
+    array['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+)
+on conflict (id) do update
+    set public             = excluded.public,
+        file_size_limit    = excluded.file_size_limit,
+        allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Public can read email assets" on storage.objects;
+create policy "Public can read email assets"
+    on storage.objects for select
+    using (bucket_id = 'email-assets');
+
+drop policy if exists "Signed-in users can upload email assets" on storage.objects;
+create policy "Signed-in users can upload email assets"
+    on storage.objects for insert to authenticated
+    with check (bucket_id = 'email-assets');
+
+-- Note: there is deliberately NO delete policy for email-assets.
+-- Emails already delivered still point at these URLs; deleting an image puts a
+-- broken picture in someone's inbox months later. Remove images by hand, from
+-- the dashboard, only when you are certain nothing references them.

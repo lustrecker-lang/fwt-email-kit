@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Library</title>
+<style>
+    :root {
+        --bg: #f5f6f8; --panel: #ffffff; --ink: #16181d; --muted: #737a85;
+        --line: #e4e7ec; --accent: #1d4ed8; --accent-soft: #eef2ff;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg: #14161a; --panel: #1c1f25; --ink: #e8eaed; --muted: #99a0aa;
+            --line: #2c3037; --accent: #7c9cff; --accent-soft: #232838;
+        }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+        margin: 0; font-family: var(--sans); background: var(--bg); color: var(--ink);
+        font-size: 14px; display: flex; flex-direction: column; overflow: hidden;
+    }
+    header {
+        display: flex; align-items: center; gap: 12px; padding: 13px 18px;
+        background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0;
+    }
+    .brand { font-weight: 700; letter-spacing: -0.3px; font-size: 15px; }
+    .brand span { color: var(--muted); font-weight: 400; }
+    .spacer { flex: 1; }
+    input[type="search"] {
+        font: inherit; font-size: 13.5px; padding: 7px 11px; border: 1px solid var(--line);
+        border-radius: 8px; background: var(--panel); color: var(--ink); width: 240px;
+    }
+    button {
+        font: inherit; font-size: 13.5px; padding: 7px 13px; border-radius: 8px;
+        border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    button.primary:hover { opacity: .9; color: #fff; }
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .seg button { border: 0; border-radius: 0; padding: 6px 13px; font-size: 12.5px; }
+    .seg button.on { background: var(--accent); color: #fff; }
+
+    main { display: flex; flex: 1; min-height: 0; }
+    .list {
+        width: 300px; border-right: 1px solid var(--line); background: var(--panel);
+        overflow-y: auto; flex-shrink: 0; padding: 8px;
+    }
+    .grp {
+        font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
+        color: var(--muted); padding: 14px 10px 6px;
+    }
+    .row { padding: 10px 11px; border-radius: 8px; cursor: pointer; }
+    .row:hover { background: var(--accent-soft); }
+    .row.on { background: var(--accent-soft); }
+    .row .n { font-size: 13.5px; font-weight: 500; }
+    .row .d { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+
+    .detail { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 16px;
+        background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0;
+    }
+    .bar .title { font-weight: 600; font-size: 14px; }
+    .view { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 22px; }
+    iframe { border: 0; background: transparent; width: 700px; min-height: 620px; height: 100%; transition: width .18s; }
+    iframe.mobile { width: 400px; }
+    pre {
+        flex: 1; overflow: auto; margin: 0; padding: 18px; font-family: var(--mono);
+        font-size: 11.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+    }
+    .chips { padding: 16px 18px; overflow-y: auto; }
+    .chip {
+        display: inline-block; font-family: var(--mono); font-size: 11px; padding: 3px 8px;
+        background: var(--accent-soft); color: var(--accent); border-radius: 6px; margin: 0 4px 4px 0;
+    }
+    .empty { color: var(--muted); text-align: center; padding: 60px 24px; line-height: 1.7; }
+    .meta { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="brand">Email <span>Library</span></div>
+    <input type="search" id="q" placeholder="Search templates…">
+    <div class="spacer"></div>
+    <span class="meta" id="count"></span>
+    <button id="reload">Reload</button>
+</header>
+
+<main>
+    <nav class="list" id="list"><div class="empty">Loading…</div></nav>
+    <section class="detail">
+        <div class="bar" id="bar" style="display:none">
+            <span class="title" id="tTitle"></span>
+            <div class="seg">
+                <button id="vPreview" class="on">Preview</button>
+                <button id="vHtml">HTML</button>
+                <button id="vVars">Merge fields</button>
+            </div>
+            <div class="seg" id="deviceSeg">
+                <button id="vDesktop" class="on">Desktop</button>
+                <button id="vMobile">Mobile</button>
+            </div>
+            <div class="spacer"></div>
+            <span class="meta" id="tMeta"></span>
+            <button class="primary" id="copyBtn">Copy HTML</button>
+        </div>
+        <div class="view" id="viewPreview"><iframe id="frame" title="Email preview"></iframe></div>
+        <pre id="viewHtml" style="display:none"></pre>
+        <div class="chips" id="viewVars" style="display:none"></div>
+    </section>
+</main>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="theme.js"></script>
+<script>
+/* Read-only view of everything saved from the composer.
+ * No sign-in: the row-level security policy allows anonymous SELECT and nothing
+ * else, so this page physically cannot change anything. */
+
+var rows = [], current = null, view = 'preview';
+
+function projectLabel(key) {
+    return (typeof THEMES !== 'undefined' && THEMES[key] && THEMES[key].label) || key;
+}
+
+function renderList() {
+    var q = document.getElementById('q').value.trim().toLowerCase();
+    var shown = rows.filter(function (r) {
+        if (!q) return true;
+        return (r.name + ' ' + (r.description || '') + ' ' + r.project).toLowerCase().indexOf(q) !== -1;
+    });
+
+    document.getElementById('count').textContent =
+        shown.length + ' of ' + rows.length + ' template' + (rows.length === 1 ? '' : 's');
+
+    if (!shown.length) {
+        document.getElementById('list').innerHTML =
+            '<div class="empty">' + (rows.length ? 'Nothing matches that search.' :
+            'No templates yet.<br>Save one from the composer.') + '</div>';
+        return;
+    }
+
+    var groups = [], byGroup = {};
+    shown.forEach(function (r) {
+        if (!byGroup[r.project]) { byGroup[r.project] = []; groups.push(r.project); }
+        byGroup[r.project].push(r);
+    });
+
+    document.getElementById('list').innerHTML = groups.map(function (g) {
+        return '<div class="grp">' + projectLabel(g) + '</div>' + byGroup[g].map(function (r) {
+            return '<div class="row' + (current && current.id === r.id ? ' on' : '') + '" data-id="' + r.id + '">' +
+                '<div class="n">' + r.name + '</div>' +
+                (r.description ? '<div class="d">' + r.description + '</div>' : '') +
+            '</div>';
+        }).join('');
+    }).join('');
+}
+
+function setView(v) {
+    view = v;
+    document.getElementById('viewPreview').style.display = v === 'preview' ? 'flex' : 'none';
+    document.getElementById('viewHtml').style.display = v === 'html' ? 'block' : 'none';
+    document.getElementById('viewVars').style.display = v === 'vars' ? 'block' : 'none';
+    document.getElementById('deviceSeg').style.display = v === 'preview' ? 'inline-flex' : 'none';
+    [['vPreview', 'preview'], ['vHtml', 'html'], ['vVars', 'vars']].forEach(function (p) {
+        document.getElementById(p[0]).classList.toggle('on', v === p[1]);
+    });
+}
+
+function show(id) {
+    Api.getTemplate(id).then(function (t) {
+        if (!t) return;
+        current = t;
+        document.getElementById('bar').style.display = 'flex';
+        document.getElementById('tTitle').textContent = t.name;
+        document.getElementById('frame').srcdoc = t.html;
+        document.getElementById('viewHtml').textContent = t.html;
+        document.getElementById('viewVars').innerHTML = (t.variables || []).length
+            ? '<p class="meta" style="margin:0 0 12px">Pass these as <code>dynamic_template_data</code>. ' +
+              'Anything omitted renders as literal {{ }} text in the delivered email.</p>' +
+              t.variables.map(function (v) { return '<span class="chip">' + v + '</span>'; }).join('')
+            : '<div class="empty">No merge fields.</div>';
+        document.getElementById('tMeta').textContent =
+            (t.sendgrid_template_id ? t.sendgrid_template_id + '  ·  ' : '') +
+            (t.html.length / 1024).toFixed(1) + ' KB';
+        renderList();
+    }).catch(function (e) {
+        document.getElementById('viewHtml').textContent = 'Could not load: ' + e.message;
+        setView('html');
+    });
+}
+
+function loadAll() {
+    document.getElementById('list').innerHTML = '<div class="empty">Loading…</div>';
+    Api.listTemplates().then(function (r) {
+        rows = r;
+        renderList();
+        if (rows.length && !current) show(rows[0].id);
+    }).catch(function (e) {
+        document.getElementById('list').innerHTML = '<div class="empty">Could not load:<br>' + e.message + '</div>';
+    });
+}
+
+document.getElementById('list').addEventListener('click', function (e) {
+    var row = e.target.closest('[data-id]');
+    if (row) show(row.getAttribute('data-id'));
+});
+document.getElementById('q').addEventListener('input', renderList);
+document.getElementById('reload').addEventListener('click', loadAll);
+
+document.getElementById('vPreview').addEventListener('click', function () { setView('preview'); });
+document.getElementById('vHtml').addEventListener('click', function () { setView('html'); });
+document.getElementById('vVars').addEventListener('click', function () { setView('vars'); });
+
+document.getElementById('vDesktop').addEventListener('click', function () {
+    document.getElementById('frame').classList.remove('mobile');
+    this.classList.add('on'); document.getElementById('vMobile').classList.remove('on');
+});
+document.getElementById('vMobile').addEventListener('click', function () {
+    document.getElementById('frame').classList.add('mobile');
+    this.classList.add('on'); document.getElementById('vDesktop').classList.remove('on');
+});
+
+document.getElementById('copyBtn').addEventListener('click', function () {
+    if (!current) return;
+    var btn = this;
+    var done = function () {
+        btn.textContent = 'Copied';
+        setTimeout(function () { btn.textContent = 'Copy HTML'; }, 1400);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(current.html).then(done, done);
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = current.html; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        done();
+    }
+});
+
+loadAll();
+</script>
+</body>
+</html>

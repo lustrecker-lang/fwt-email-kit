@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "email-kit",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4180", "--directory", "/Users/luizstrecker/Projects/egovern-email-kit"],
+      "url": "http://localhost:4180",
+      "port": 4180
+    }
+  ]
+}
