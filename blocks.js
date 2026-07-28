@@ -22,17 +22,21 @@ var BLOCKS = [
     id: 'header-logo',
     name: 'Logo',
     group: 'Header',
-    desc: 'The mark, small and quiet. Left-aligned by default — centred logos read as marketing.',
+    desc: 'The mark, small and quiet. Left-aligned by default — centred logos read as marketing. Uses the project logo unless you upload one here.',
     opts: {
+        logo: { label: 'Logo', type: 'image', default: '' },
         align: { label: 'Alignment', type: 'select', choices: ['left', 'center'], default: 'left' },
         size: { label: 'Size', type: 'select', choices: ['small', 'medium', 'large'], default: 'medium' }
     },
     render: function (t, o) {
         var scale = { small: 0.72, medium: 1, large: 1.3 }[o.size] || 1;
         var w = Math.round((t.logoWidth || 140) * scale);
-        var mark = t.logoUrl
-            ? '<img src="' + t.logoUrl + '" width="' + w + '" alt="' + t.brandName + '" style="display:block;border:0;outline:none;text-decoration:none;height:auto;width:' + w + 'px;max-width:100%;' + (o.align === 'center' ? 'margin:0 auto;' : '') + '">'
-            : '<span style="' + font(t, 'heading', t.text, 'letter-spacing:-0.2px;') + '">' + t.brandName + '</span>';
+        /* An upload here overrides the project logo, for the one-off email that
+         * carries a department mark or a campaign lockup. */
+        var src = assetUrl(o.logo, '') || t.logoUrl;
+        var mark = src
+            ? '<img src="' + src + '" width="' + w + '" alt="' + esc(t.brandName) + '" style="display:block;border:0;outline:none;text-decoration:none;height:auto;width:' + w + 'px;max-width:100%;' + (o.align === 'center' ? 'margin:0 auto;' : '') + '">'
+            : '<span style="' + font(t, 'heading', t.text, 'letter-spacing:-0.2px;') + '">' + esc(t.brandName) + '</span>';
         return '' +
 '<tr><td class="px" align="' + o.align + '" style="' + pad(t, 40) + '">' + mark + '</td></tr>';
     }
@@ -86,7 +90,7 @@ var BLOCKS = [
         var w = o.bleed ? t.width : t.width - (t.pad * 2);
         /* An uploaded image is baked in; without one the URL stays a merge field
          * so the same template can carry a different picture per send. */
-        var src = o.src ? o.src : '{{hero_image_url}}';
+        var src = assetUrl(o.src, '{{hero_image_url}}');
         var img = '<img src="' + src + '" width="' + w + '" height="' + h + '" alt="{{hero_image_alt}}" style="display:block;border:0;outline:none;text-decoration:none;width:100%;max-width:' + w + 'px;height:' + h + 'px;object-fit:cover;' + (o.bleed ? '' : 'border-radius:' + t.radiusSm + 'px;') + '">';
         return o.bleed
             ? '<tr><td style="padding:32px 0 0 0;font-size:0;line-height:0;">' + img + '</td></tr>'
@@ -285,21 +289,31 @@ var BLOCKS = [
     id: 'document-list',
     name: 'Documents',
     group: 'Content',
-    desc: 'Downloadable documents as hairline rows with a trailing link.',
+    desc: 'Downloadable documents as hairline rows with a trailing link. Upload a file per row, or leave it empty to fill from a merge field at send time.',
     opts: {
-        count: { label: 'Documents', type: 'select', choices: ['1', '2', '3'], default: '2' }
+        count: { label: 'Documents', type: 'select', choices: ['1', '2', '3'], default: '2' },
+        file1: { label: 'File 1', type: 'file', default: '' },
+        file2: { label: 'File 2', type: 'file', default: '', showIf: function (o) { return parseInt(o.count, 10) >= 2; } },
+        file3: { label: 'File 3', type: 'file', default: '', showIf: function (o) { return parseInt(o.count, 10) >= 3; } }
     },
     render: function (t, o) {
         var n = parseInt(o.count, 10);
         var rows = '';
         for (var i = 1; i <= n; i++) {
+            /* Upload a file and the row is fixed: real name, real weight, a
+             * permanent URL. Leave it empty and all three stay merge fields, so
+             * engineering fills them per send. */
+            var f = o['file' + i];
+            var name = assetName(f, '{{document_' + i + '_name}}');
+            var meta = assetMeta(f, '{{document_' + i + '_meta}}');
+            var url = assetUrl(f, '{{document_' + i + '_url}}');
             rows += '' +
 '<tr>' +
-    '<td valign="middle" style="padding:16px 0;border-bottom:1px solid ' + t.hairline + ';' + font(t, 'small', t.text, 'font-weight:600;') + '">{{document_' + i + '_name}}' +
-        '<div style="' + font(t, 'micro', t.textMuted, 'padding-top:2px;') + '">{{document_' + i + '_meta}}</div>' +
+    '<td valign="middle" style="padding:16px 0;border-bottom:1px solid ' + t.hairline + ';' + font(t, 'small', t.text, 'font-weight:600;') + '">' + name +
+        '<div style="' + font(t, 'micro', t.textMuted, 'padding-top:2px;') + '">' + meta + '</div>' +
     '</td>' +
     '<td align="right" valign="middle" style="padding:16px 0;border-bottom:1px solid ' + t.hairline + ';">' +
-        '<a href="{{document_' + i + '_url}}" style="' + font(t, 'small', t.brand, 'font-weight:600;text-decoration:none;') + '">Download</a>' +
+        '<a href="' + url + '" style="' + font(t, 'small', t.brand, 'font-weight:600;text-decoration:none;') + '">Download</a>' +
     '</td>' +
 '</tr>';
         }

@@ -242,8 +242,20 @@
     .opt input[type="checkbox"] { width: 16px; height: 16px; }
     .dup { border: 0; background: none; padding: 4px 0 0; font-size: 12.5px; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
     .dup:hover { border: 0; }
-    .imgopt { display: flex; align-items: center; gap: 7px; }
+    .imgopt { display: flex; align-items: center; gap: 7px; min-width: 0; }
     .thumb { width: 34px; height: 24px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); display: block; }
+    /* The drop target doubles as the upload button's container, so a file can be
+       dragged straight onto the option it belongs to. */
+    .imgopt.drop-live {
+        outline: 2px dashed var(--accent); outline-offset: 3px; border-radius: 5px;
+    }
+    .imgopt .busy { font-size: 12px; color: var(--muted); }
+    .imgopt:hover { cursor: copy; }
+    .fname {
+        font-size: 12px; color: var(--ink); max-width: 140px; overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap;
+    }
+    .fname em { color: var(--muted); font-style: normal; }
     .empty { text-align: center; color: var(--muted); font-size: 13px; padding: 36px 20px; line-height: 1.65; }
 
     dialog {
@@ -392,7 +404,9 @@
     </main>
 </section>
 
-<input type="file" id="filePicker" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+<!-- One hidden picker for every upload button; `accept` is set per click, from
+     the same allow-list the bucket enforces. -->
+<input type="file" id="filePicker" style="display:none">
 
 <dialog id="detailsDlg">
     <div class="modal-head"><strong>Template details</strong><div class="spacer"></div>
@@ -541,13 +555,21 @@ function renderCompose() {
         for (var k in b.opts) {
             if (!Object.prototype.hasOwnProperty.call(b.opts, k)) continue;
             var spec = b.opts[k], field;
-            if (spec.type === 'image') {
-                var url = item.opts[k];
-                field = '<span class="imgopt">' +
-                    (url ? '<img class="thumb" src="' + url + '" alt="">' : '') +
-                    '<button type="button" class="linkbtn" data-upload="' + item.uid + '|' + k + '">' +
-                        (url ? 'Replace' : 'Upload') + '</button>' +
-                    (url ? '<button type="button" class="linkbtn" data-clearimg="' + item.uid + '|' + k + '">clear</button>' : '') +
+            /* An option can depend on another — the third file slot is pointless
+             * on a two-row Documents block. The value is kept either way, so
+             * turning the row back on brings the file back with it. */
+            if (spec.showIf && !spec.showIf(item.opts)) continue;
+            if (spec.type === 'image' || spec.type === 'file') {
+                var a = asset(item.opts[k]);
+                var isImg = spec.type === 'image';
+                field = '<span class="imgopt" data-drop="' + item.uid + '|' + k + '|' + spec.type + '"' +
+                        ' title="Click Upload, or drop a ' + (isImg ? 'picture' : 'file') + ' here">' +
+                    (a && isImg ? '<img class="thumb" src="' + a.url + '" alt="">' : '') +
+                    (a && !isImg ? '<span class="fname" title="' + esc(a.name || a.url) + '">' +
+                        esc(a.name || 'file') + ' <em>' + esc(assetMeta(a, '')) + '</em></span>' : '') +
+                    '<button type="button" class="linkbtn" data-upload="' + item.uid + '|' + k + '|' + spec.type + '">' +
+                        (a ? 'Replace' : 'Upload') + '</button>' +
+                    (a ? '<button type="button" class="linkbtn" data-clearimg="' + item.uid + '|' + k + '">clear</button>' : '') +
                 '</span>';
             } else if (spec.type === 'bool') {
                 field = '<input type="checkbox" data-opt="' + item.uid + '|' + k + '"' + (item.opts[k] ? ' checked' : '') + '>';
@@ -911,7 +933,7 @@ document.getElementById('bLogoW').addEventListener('input', function (e) {
     brandDraft.logo_width = isNaN(v) ? null : v;
     renderBrandPreview();
 });
-document.getElementById('btnBrandLogoUpload').addEventListener('click', function () { pickImage('brandlogo'); });
+document.getElementById('btnBrandLogoUpload').addEventListener('click', function () { pickAsset('brandlogo'); });
 
 document.getElementById('btnBrandSave').addEventListener('click', function () {
     var btn = this, st = document.getElementById('brandStatus');
@@ -1069,42 +1091,135 @@ function persist() {
     });
 }
 
-/* ------------------------------------------------------------- image upload */
+/* -------------------------------------------------------------- file upload */
+/* Two ways in — the Upload button, or dropping a file on the option — and both
+ * land in takeUpload(). Targets are encoded as "uid|optKey|kind", or the string
+ * 'brandlogo' for the project logo on the Colours screen. */
 
-var pendingImage = null;
+var pendingTarget = null;
 
-function pickImage(target) {
-    pendingImage = target;
-    document.getElementById('filePicker').value = '';
-    document.getElementById('filePicker').click();
+function pickAsset(target) {
+    var kind = target === 'brandlogo' ? 'image' : (target.split('|')[2] || 'image');
+    var picker = document.getElementById('filePicker');
+    pendingTarget = target;
+    picker.setAttribute('accept', Api.acceptAttr(kind));
+    picker.value = '';
+    picker.click();
 }
 
-document.getElementById('filePicker').addEventListener('change', function (e) {
-    var file = e.target.files && e.target.files[0];
-    if (!file || !pendingImage) return;
-    var target = pendingImage; pendingImage = null;
-
+function takeUpload(target, file) {
+    if (!target || !file) return;
     var isBrand = target === 'brandlogo';
+    var parts = isBrand ? [] : target.split('|');
+    var kind = isBrand ? 'image' : (parts[2] || 'image');
     var st = document.getElementById(isBrand ? 'brandStatus' : 'statusLine');
+
+    /* Fail before the network call when the file is obviously wrong, so the
+     * message names the problem instead of relaying a mime error. */
+    var bad = Api.checkFile(file, kind);
+    if (bad) {
+        st.textContent = bad;
+        if (isBrand) st.className = 'err';
+        return;
+    }
     st.textContent = 'Uploading ' + file.name + '…';
     if (isBrand) st.className = 'who';
+    markBusy(target, true);
 
-    Api.uploadImage(file).then(function (url) {
+    Api.uploadFile(file, kind).then(function (url) {
         if (isBrand) {
             brandDraft.logo_url = url;
             document.getElementById('bLogo').value = url;
             st.textContent = 'Uploaded — remember to Save';
             renderBrandPreview();
-        } else {
-            var p = target.split('|');
-            var idx = indexOfUid(parseInt(p[0], 10));
-            if (idx >= 0) state.items[idx].opts[p[1]] = url;
-            renderAll();
+            return;
         }
+        var idx = indexOfUid(parseInt(parts[0], 10));
+        if (idx < 0) return;
+        /* An image only needs its URL. A file carries its name and weight too,
+         * because the Documents row displays both. */
+        state.items[idx].opts[parts[1]] = kind === 'image'
+            ? url
+            : { url: url, name: file.name, size: file.size };
+        renderAll();
     }).catch(function (ex) {
+        markBusy(target, false);
         st.textContent = 'Upload failed: ' + ex.message;
         if (isBrand) st.className = 'err';
     });
+}
+
+function markBusy(target, on) {
+    var el = document.querySelector('[data-drop="' + target.replace(/"/g, '') + '"]');
+    if (!el) return;
+    el.classList.remove('drop-live');
+    var b = el.querySelector('.busy');
+    if (on && !b) {
+        b = document.createElement('span');
+        b.className = 'busy';
+        b.textContent = 'uploading…';
+        el.appendChild(b);
+    } else if (!on && b) {
+        b.parentNode.removeChild(b);
+    }
+}
+
+document.getElementById('filePicker').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    var target = pendingTarget;
+    pendingTarget = null;
+    takeUpload(target, file);
+});
+
+/* --- drop a file straight onto the option it belongs to -------------------
+ * The reorder handlers further down bail out unless a section drag is in
+ * progress, so these two can share the same element without fighting. */
+function isFileDrag(e) {
+    var dt = e.dataTransfer;
+    if (!dt) return false;
+    if (dt.types) for (var i = 0; i < dt.types.length; i++) if (dt.types[i] === 'Files') return true;
+    return false;
+}
+
+/* Drag events can land on a text node, which has no closest(). */
+function zoneAt(e) {
+    var n = e.target;
+    if (n && n.nodeType === 3) n = n.parentNode;
+    return (n && n.closest) ? n.closest('[data-drop]') : null;
+}
+
+document.getElementById('compose').addEventListener('dragover', function (e) {
+    if (!isFileDrag(e)) return;
+    var zone = zoneAt(e);
+    if (!zone) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    zone.classList.add('drop-live');
+}, true);
+
+document.getElementById('compose').addEventListener('dragleave', function (e) {
+    var zone = zoneAt(e);
+    if (zone && !zone.contains(e.relatedTarget)) zone.classList.remove('drop-live');
+}, true);
+
+document.getElementById('compose').addEventListener('drop', function (e) {
+    if (!isFileDrag(e)) return;
+    var zone = zoneAt(e);
+    if (!zone) return;
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.remove('drop-live');
+    takeUpload(zone.getAttribute('data-drop'), e.dataTransfer.files[0]);
+}, true);
+
+/* A file dropped anywhere else would make the browser navigate to it, throwing
+ * away the composition. Swallow those. */
+window.addEventListener('dragover', function (e) {
+    if (isFileDrag(e) && !zoneAt(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; }
+});
+window.addEventListener('drop', function (e) {
+    if (isFileDrag(e) && !zoneAt(e)) e.preventDefault();
 });
 
 /* ------------------------------------------------------------------ palette */
@@ -1136,7 +1251,7 @@ document.getElementById('compose').addEventListener('click', function (e) {
         return;
     }
     var up = e.target.closest('[data-upload]');
-    if (up) { pickImage(up.getAttribute('data-upload')); return; }
+    if (up) { pickAsset(up.getAttribute('data-upload')); return; }
 
     var clr = e.target.closest('[data-clearimg]');
     if (clr) {
@@ -1165,8 +1280,23 @@ document.getElementById('compose').addEventListener('change', function (e) {
     var idx = indexOfUid(parseInt(p[0], 10));
     if (idx < 0) return;
     state.items[idx].opts[p[1]] = (f.type === 'checkbox') ? f.checked : f.value;
+
+    /* One exception to "preview only": if any option in this block is gated on
+     * another, the list itself has to be rebuilt — dropping Documents from 3
+     * rows to 2 should take the third upload slot away with it. Focus is not a
+     * concern here, the choice has already been made. */
+    var b = blockById(state.items[idx].blockId);
+    if (b && hasConditionalOpts(b)) renderCompose();
+
     renderPreview(); touch();
 });
+
+function hasConditionalOpts(b) {
+    for (var k in b.opts) {
+        if (Object.prototype.hasOwnProperty.call(b.opts, k) && b.opts[k].showIf) return true;
+    }
+    return false;
+}
 
 /* --- drag to reorder: draggable only while the grip is held, so the selects
  *     and checkboxes inside a section stay usable ------------------------- */

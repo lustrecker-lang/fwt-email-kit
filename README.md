@@ -77,16 +77,44 @@ Reopening a template gives you the real thing back, not just its HTML: the block
 composition is stored alongside the rendered output, so everything stays
 editable.
 
-**Images.** Add an Image section, expand it, hit **Upload**. The file goes to
-Supabase Storage and comes back as a permanent public URL, already filled in.
-The logo field in **Colours** has the same upload button.
+**Pictures and files.** Expand a section and hit **Upload**, or drag the file
+straight onto the slot. It goes to Supabase Storage and comes back as a
+permanent public URL, already filled in. Four places take an upload:
 
-Leave an Image section's upload empty and it keeps `{{hero_image_url}}` as a
-merge field instead, so one template can carry a different picture per send.
+| Where | Takes | Notes |
+| --- | --- | --- |
+| **Image** section | PNG, JPG, GIF, WebP | The hero picture. |
+| **Logo** section | PNG, JPG, GIF, WebP | Overrides the project logo for this one template — a department mark or a campaign lockup. Leave it empty and the project logo is used. |
+| **Documents** section | PDF, Word, Excel, CSV, TXT, ZIP, or an image | One file per row. Upload slots appear and disappear with the row count. |
+| Logo in **Colours** | PNG, JPG, GIF, WebP | Sets the project logo, for every template on that project. |
 
-> **Never delete an uploaded image.** Emails already delivered still point at
-> that URL — deleting it puts a broken picture in someone's inbox months later.
-> The storage policy deliberately grants no delete permission for this reason.
+Upload a document and the row is fixed: it shows the real filename, the real
+type and weight (`PDF · 249 KB`), and links to the permanent URL. Leave a slot
+empty and all its fields stay merge fields — `{{document_1_name}}`,
+`{{document_1_url}}` and so on — so engineering fills them per send. Same with
+the Image section: no upload means `{{hero_image_url}}` survives, and one
+template can carry a different picture each time.
+
+The **Variables** panel follows this automatically. Bake a file in and its
+placeholders drop off the list, because there is nothing left for engineering to
+supply.
+
+Limits are 10 MB a file, and the type must be on the list above — both are
+enforced by the bucket and checked before upload so you get a sentence rather
+than a mime error. **SVG is rejected on purpose**, for pictures at least:
+Outlook and several Android clients will not render it. Export a PNG at twice
+the display width.
+
+> **Never delete an uploaded file.** Emails already delivered still point at
+> that URL — deleting it puts a broken picture in someone's inbox months later,
+> or a dead download link on a decision letter. The storage policy deliberately
+> grants no delete permission for this reason.
+>
+> It also means the bucket is public: anyone with the URL can read it. Do not
+> upload anything holding one person's data — a named certificate, a statement,
+> an ID scan. Those belong behind the app's own authentication, linked from
+> `{{document_1_url}}` as a merge field. Upload only what every recipient of the
+> template may see: blank forms, guidance notes, logos, pictures.
 
 **Signing in.** Reading is open to everyone. You are only asked to sign in the
 first moment you try to save or upload, and the session persists after that.
@@ -110,6 +138,11 @@ Already done for this project, but for the record — or to stand up a second on
 2. Paste [supabase/schema.sql](supabase/schema.sql) into the SQL Editor and run
    it. That creates the `email_templates` table, the row-level security
    policies, and the public `email-assets` bucket.
+
+   > Re-run it if your bucket predates document upload. The bucket originally
+   > allowed image types only, at 5 MB, so a PDF came back as a mime error. The
+   > script is idempotent — the `on conflict do update` widens the existing
+   > bucket in place and touches no stored file.
 3. **Authentication → Sign In / Providers → Email → turn off "Allow new users to
    sign up".** The policies grant write access to any signed-in user, so leaving
    sign-ups open would let anyone register and edit your templates.
@@ -134,7 +167,8 @@ every policy, and that file is served to the browser.
    it will land.
 5. **Click a section's name** to open its options. They stay closed otherwise —
    most of the time you do not need them. Options are per-instance, so two
-   Paragraph blocks can differ.
+   Paragraph blocks can differ. Upload slots live here: click **Upload**, or
+   drag a picture or document onto the slot.
 6. **Real text / Placeholders** switches between seeing it as a recipient would
    and seeing the raw `{{ }}` template you are about to ship.
 7. **Export** opens both outputs: the **HTML** to paste into SendGrid, and the
@@ -187,6 +221,14 @@ Each project sets its own `logoUrl` and `logoWidth` in `theme.js`. Both are
 empty by default and fall back to a text wordmark, because **a logo must be an
 absolute, publicly reachable `https://` URL** — mail clients cannot resolve
 `/images/logo.png`, and most block `data:` URIs in `<img>`.
+
+Uploading through **Colours** or the **Logo** section satisfies that
+automatically, since Supabase hands back exactly that kind of URL. Editing the
+field by hand is still there if the asset already lives on a CDN.
+
+Three levels, most specific wins: an upload on the **Logo** section beats the
+project logo saved in **Colours**, which beats the `logoUrl` shipped in
+`theme.js`.
 
 The assets exist in the repos already and need re-hosting on a public bucket or
 CDN before they will render:
@@ -259,8 +301,8 @@ the real, suffixed names, so copy from there rather than guessing.
 | `index.html` | The composer. Build, theme, upload, save, export. Nothing brand-specific lives here. |
 | `library.html` | The shared read-only link. Browse, preview, copy HTML, read merge fields. |
 | `blocks.js` | **The catalogue.** Every section, plus the document shell and the variable extractor. Edit this to add a section. |
-| `theme.js` | Colour roles, per-project themes, the type scale, layout constants and status tones. |
-| `api.js` | Supabase access — auth, templates, image upload. Plain `fetch`, no SDK. |
+| `theme.js` | Colour roles, per-project themes, the type scale, layout constants, status tones, and the block-authoring helpers. |
+| `api.js` | Supabase access — auth, templates, uploads and the allow-list they are checked against. Plain `fetch`, no SDK. |
 | `config.js` | Project URL and publishable key. Safe to commit. |
 | `supabase/schema.sql` | The whole backend: one table, its policies, one bucket. |
 
@@ -279,7 +321,9 @@ automatically — there is no registry to update.
     desc: 'Shown in the palette under the name.',
     opts: {
         currency: { label: 'Currency', type: 'select', choices: ['BBD', 'USD'], default: 'BBD' },
-        showTax:  { label: 'Tax line', type: 'bool', default: true }
+        showTax:  { label: 'Tax line', type: 'bool', default: true },
+        receipt:  { label: 'Attach receipt', type: 'file', default: '',
+                    showIf: function (o) { return o.showTax; } }
     },
     render: function (t, o) {
         return '<tr><td class="px" style="' + pad(t, 28) + '">' +
@@ -289,12 +333,32 @@ automatically — there is no registry to update.
 }
 ```
 
-Two helpers keep blocks consistent:
+Four option types, and one way to hide an option that does not apply:
+
+| `type` | Control | Stored as |
+| --- | --- | --- |
+| `select` | Dropdown, from `choices` | string |
+| `bool` | Checkbox | boolean |
+| `image` | Thumbnail + Upload / Replace / clear, and a drop target | URL string |
+| `file` | Filename + weight + Upload / Replace / clear, and a drop target | `{ url, name, size }` |
+
+`showIf: function (o) { … }` on any option hides it when it returns false. `o`
+is the block's current options, so one control can gate another — that is how
+the third file slot on Documents disappears on a two-row list. The value is kept
+while hidden, so turning the row back on brings the file back with it.
+
+Helpers that keep blocks consistent:
 
 - `font(t, style, colour, extra)` — emits a full inline font declaration from
   the shared type scale. Styles: `display`, `title`, `heading`, `lead`, `body`,
   `small`, `micro`, `label`.
 - `pad(t, top, bottom)` — the standard gutter, so every section lines up.
+- `assetUrl(v, placeholder)`, `assetName(v, placeholder)`,
+  `assetMeta(v, placeholder)` — read an `image` or `file` option, falling back
+  to the placeholder when nothing has been uploaded. Use these rather than
+  reading the option directly: they normalise both storage shapes, so a
+  composition saved by an older version still opens, and they escape filenames.
+- `esc(s)` — HTML-escape anything that came from a filename or a text field.
 
 Four rules, and the system holds together:
 

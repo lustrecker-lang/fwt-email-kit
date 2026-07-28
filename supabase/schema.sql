@@ -108,16 +108,33 @@ create policy "Signed-in users can delete project brands"
 
 -- ================================================================== storage
 -- Public bucket: uploaded images need a permanent, publicly reachable URL,
--- because mail clients cannot load anything else.
--- SVG is deliberately excluded — Outlook and several Android clients won't render it.
+-- because mail clients cannot load anything else. Attachments linked from a
+-- Documents section need the same thing — the recipient clicks the URL months
+-- later, long after any signed link would have expired.
+--
+-- SVG is deliberately excluded — Outlook and several Android clients won't
+-- render it. So is text/html: a public bucket serving attacker-authored HTML on
+-- the project's own origin is a stored-XSS hole, and no email needs it.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
     'email-assets',
     'email-assets',
     true,
-    5242880,                                     -- 5 MB
-    array['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+    10485760,                                    -- 10 MB
+    array[
+        -- pictures: logos, hero images
+        'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+        -- documents linked from a Documents section
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/csv',
+        'text/plain',
+        'application/zip'
+    ]
 )
 on conflict (id) do update
     set public             = excluded.public,

@@ -184,3 +184,46 @@ function font(t, styleName, color, extra) {
 function pad(t, top, bottom) {
     return 'padding:' + top + 'px ' + t.pad + 'px ' + (bottom || 0) + 'px ' + t.pad + 'px;';
 }
+
+/* ------------------------------------------------------- uploaded assets */
+/* An `image` option stores a bare URL string; a `file` option stores
+ * { url, name, size } because a document row wants to show its real filename
+ * and weight, not just link to it. Both are normalised through here so a block
+ * can treat them the same, and so composition JSON saved by an older version
+ * still opens. */
+function asset(v) {
+    if (!v) return null;
+    if (typeof v === 'string') return { url: v, name: '', size: 0 };
+    return v.url ? { url: v.url, name: v.name || '', size: v.size || 0 } : null;
+}
+
+/* Filenames are whatever the operating system allowed, so they are escaped
+ * before going anywhere near the document. */
+function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* `{{placeholder}}` until something is actually uploaded, so one template can
+ * still carry a different file per send. */
+function assetUrl(v, placeholder) {
+    var a = asset(v);
+    return a ? a.url : placeholder;
+}
+
+/* "PDF · 1.2 MB" — the line under a document's name. */
+function assetMeta(v, placeholder) {
+    var a = asset(v);
+    if (!a || !a.name) return placeholder;
+    var ext = (a.name.split('.').pop() || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    var size = !a.size ? ''
+        : a.size < 1024 ? a.size + ' B'
+        : a.size < 1048576 ? Math.round(a.size / 1024) + ' KB'
+        : (a.size / 1048576).toFixed(1) + ' MB';
+    return [ext, size].filter(Boolean).join(' · ') || placeholder;
+}
+
+function assetName(v, placeholder) {
+    var a = asset(v);
+    return (a && a.name) ? esc(a.name) : placeholder;
+}

@@ -213,10 +213,73 @@ var Api = (function () {
 
     /* ---------------------------------------------------------------- storage */
 
+    /* What the bucket accepts, mirroring allowed_mime_types in schema.sql.
+     * Checked here as well so a wrong file gets a sentence a human can act on
+     * instead of the storage API's raw mime error. */
+    var ACCEPT = {
+        image: {
+            label: 'image',
+            mime: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
+            ext: ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+            hint: 'PNG, JPG, GIF or WebP.'
+        },
+        /* A document row is just a link, so the recipient's browser decides what
+         * to do with it — images belong here too, for the scanned certificate. */
+        file: {
+            label: 'file',
+            mime: [
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'text/csv', 'text/plain', 'application/zip',
+                'image/png', 'image/jpeg', 'image/gif', 'image/webp'
+            ],
+            ext: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'zip',
+                  'png', 'jpg', 'jpeg', 'gif', 'webp'],
+            hint: 'PDF, Word, Excel, CSV, TXT, ZIP or an image.'
+        }
+    };
+
+    var MAX_BYTES = 10 * 1024 * 1024;   /* matches file_size_limit on the bucket */
+
+    function acceptAttr(kind) {
+        var a = ACCEPT[kind] || ACCEPT.image;
+        return a.mime.concat(a.ext.map(function (e) { return '.' + e; })).join(',');
+    }
+
+    /* Browsers disagree about file.type — Windows reports '' for .csv often
+     * enough that extension is the more reliable signal of the two. */
+    function checkFile(file, kind) {
+        var a = ACCEPT[kind] || ACCEPT.image;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        var okExt = a.ext.indexOf(ext) >= 0;
+        var okMime = !!file.type && a.mime.indexOf(file.type) >= 0;
+
+        if (!okExt && !okMime) {
+            /* SVG is the one people reach for and are surprised by, so it gets
+             * the reason rather than just the allow-list. */
+            if (ext === 'svg') {
+                return 'SVG will not render in Outlook or several Android mail ' +
+                       'clients. Export it as a PNG at twice the display width.';
+            }
+            return 'That is not a supported ' + a.label + '. ' + a.hint;
+        }
+        if (file.size > MAX_BYTES) {
+            return 'That ' + a.label + ' is ' + (file.size / 1048576).toFixed(1) +
+                   ' MB. The limit is 10 MB.';
+        }
+        return null;
+    }
+
     /* Returns the permanent public URL. Files are never overwritten or deleted:
      * emails already delivered still point at them. */
-    function uploadImage(file) {
-        if (!isSignedIn()) return Promise.reject(new Error('Sign in to upload images'));
+    function uploadFile(file, kind) {
+        if (!isSignedIn()) return Promise.reject(new Error('Sign in to upload'));
+
+        var bad = checkFile(file, kind || 'image');
+        if (bad) return Promise.reject(new Error(bad));
 
         var clean = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '');
         var path = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7) + '-' + clean;
@@ -238,6 +301,8 @@ var Api = (function () {
             return SUPABASE.url + '/storage/v1/object/public/' + SUPABASE.bucket + '/' + path;
         });
     }
+
+    function uploadImage(file) { return uploadFile(file, 'image'); }
 
     /* ------------------------------------------------------------------ util */
 
@@ -266,6 +331,9 @@ var Api = (function () {
         resetBrand: resetBrand,
         listByProject: listByProject,
         updateHtml: updateHtml,
-        uploadImage: uploadImage
+        uploadImage: uploadImage,
+        uploadFile: uploadFile,
+        acceptAttr: acceptAttr,
+        checkFile: checkFile
     };
 })();
