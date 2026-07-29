@@ -50,6 +50,17 @@
     .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
     .seg button { border: 0; border-radius: 0; padding: 6px 13px; font-size: 12.5px; }
     .seg button.on { background: var(--accent); color: var(--on-accent); }
+    /* Icon-only. Each button keeps a title and an aria-label, because there is
+       no longer a word to read. */
+    .seg.icons button {
+        padding: 0; width: 40px; height: 30px;
+        display: inline-flex; align-items: center; justify-content: center;
+    }
+    .seg.icons svg {
+        width: 16px; height: 16px; display: block;
+        fill: none; stroke: currentColor; stroke-width: 1.4;
+        stroke-linecap: round; stroke-linejoin: round;
+    }
 
     main { display: flex; flex: 1; min-height: 0; }
     .list {
@@ -80,7 +91,6 @@
         display: flex; align-items: center; gap: 10px; padding: 9px 16px;
         background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0;
     }
-    .bar .title { font-weight: 600; font-size: 14px; }
     .view { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 22px; }
     iframe { border: 0; background: transparent; width: 700px; min-height: 620px; height: 100%; transition: width .18s; }
     iframe.mobile { width: 400px; }
@@ -101,7 +111,6 @@
 
 <header>
     <div class="brand">Email <span>Library</span></div>
-    <input type="search" id="q" placeholder="Search templates…">
     <div class="spacer"></div>
     <span class="meta" id="count"></span>
     <button id="reload">Reload</button>
@@ -111,15 +120,24 @@
     <nav class="list" id="list"><div class="empty">Loading…</div></nav>
     <section class="detail">
         <div class="bar" id="bar" style="display:none">
-            <span class="title" id="tTitle"></span>
-            <div class="seg">
-                <button id="vPreview" class="on">Preview</button>
-                <button id="vHtml">HTML</button>
-                <button id="vVars">Merge fields</button>
+            <div class="seg icons" role="group" aria-label="View">
+                <button id="vPreview" class="on" title="Preview" aria-label="Preview">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.4 8s2.5-4.4 6.6-4.4S14.6 8 14.6 8s-2.5 4.4-6.6 4.4S1.4 8 1.4 8z"/><circle cx="8" cy="8" r="1.9"/></svg>
+                </button>
+                <button id="vHtml" title="HTML source" aria-label="HTML source">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.1 4.2L2.4 8l3.7 3.8"/><path d="M9.9 4.2L13.6 8l-3.7 3.8"/></svg>
+                </button>
+                <button id="vVars" title="Merge fields" aria-label="Merge fields">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.3 2.6c-1.7 0-1.2 4.6-2.9 4.6 1.7 0 1.2 6.2 2.9 6.2"/><path d="M9.7 2.6c1.7 0 1.2 4.6 2.9 4.6-1.7 0-1.2 6.2-2.9 6.2"/></svg>
+                </button>
             </div>
-            <div class="seg" id="deviceSeg">
-                <button id="vDesktop" class="on">Desktop</button>
-                <button id="vMobile">Mobile</button>
+            <div class="seg icons" id="deviceSeg" role="group" aria-label="Preview width">
+                <button id="vDesktop" class="on" title="Desktop width" aria-label="Desktop width">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.6" y="2.6" width="12.8" height="9" rx="1.5"/><path d="M5.8 14h4.4M8 11.6V14"/></svg>
+                </button>
+                <button id="vMobile" title="Mobile width" aria-label="Mobile width">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4.6" y="1.8" width="6.8" height="12.4" rx="1.8"/><path d="M7.3 12.3h1.4"/></svg>
+                </button>
             </div>
             <div class="spacer"></div>
             <span class="meta" id="tMeta"></span>
@@ -146,26 +164,19 @@ function projectLabel(key) {
 }
 
 function renderList() {
-    var q = document.getElementById('q').value.trim().toLowerCase();
-    var shown = rows.filter(function (r) {
-        if (!q) return true;
-        return (r.name + ' ' + (r.description || '') + ' ' + r.project).toLowerCase().indexOf(q) !== -1;
-    });
-
     var liveCount = rows.filter(function (r) { return r.is_live; }).length;
     document.getElementById('count').textContent =
-        shown.length + ' of ' + rows.length + ' template' + (rows.length === 1 ? '' : 's') +
+        rows.length + ' template' + (rows.length === 1 ? '' : 's') +
         (liveCount ? '  ·  ' + liveCount + ' live' : '');
 
-    if (!shown.length) {
+    if (!rows.length) {
         document.getElementById('list').innerHTML =
-            '<div class="empty">' + (rows.length ? 'Nothing matches that search.' :
-            'No templates yet.<br>Save one from the composer.') + '</div>';
+            '<div class="empty">No templates yet.<br>Save one from the composer.</div>';
         return;
     }
 
     var groups = [], byGroup = {};
-    shown.forEach(function (r) {
+    rows.forEach(function (r) {
         if (!byGroup[r.project]) { byGroup[r.project] = []; groups.push(r.project); }
         byGroup[r.project].push(r);
     });
@@ -197,8 +208,7 @@ function show(id) {
         if (!t) return;
         current = t;
         document.getElementById('bar').style.display = 'flex';
-        document.getElementById('tTitle').innerHTML = esc(t.name) +
-            (t.is_live ? '<span class="live">Live</span>' : '');
+
         document.getElementById('frame').srcdoc = t.html;
         document.getElementById('viewHtml').textContent = t.html;
         document.getElementById('viewVars').innerHTML = (t.variables || []).length
@@ -231,7 +241,6 @@ document.getElementById('list').addEventListener('click', function (e) {
     var row = e.target.closest('[data-id]');
     if (row) show(row.getAttribute('data-id'));
 });
-document.getElementById('q').addEventListener('input', renderList);
 document.getElementById('reload').addEventListener('click', loadAll);
 
 document.getElementById('vPreview').addEventListener('click', function () { setView('preview'); });

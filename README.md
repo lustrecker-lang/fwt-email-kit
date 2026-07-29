@@ -79,14 +79,15 @@ editable.
 
 **Pictures and files.** Expand a section and hit **Upload**, or drag the file
 straight onto the slot. It goes to Supabase Storage and comes back as a
-permanent public URL, already filled in. Seven places take an upload:
+permanent public URL, already filled in. Eight places take an upload:
 
 | Where | Takes | Notes |
 | --- | --- | --- |
 | **Image** section | PNG, JPG, GIF, WebP | The hero picture. |
 | **Logo** section | PNG, JPG, GIF, WebP | Overrides the project logo for this one template — a department mark or a campaign lockup. Leave it empty and the project logo is used. |
 | **Documents** section | PDF, Word, Excel, CSV, TXT, ZIP, or an image | One file per row. Upload slots appear and disappear with the row count. |
-| **Signature** section | PNG, JPG, GIF, WebP | A scanned signature, and an optional stamp or seal beside it. Use **transparent PNGs** — a JPEG arrives as a white rectangle sitting on the card. |
+| **Signature** section | PNG, JPG, GIF, WebP | The scanned signature, per email — a letter is signed by whoever decided it. Use a **transparent PNG**; a JPEG arrives as a white rectangle sitting on the card. |
+| Stamp in **Projects** | PNG, JPG, GIF, WebP | The official seal, once per organisation. Transparent PNG again. Signature has a toggle to show it beside the sign-off. |
 | **Panel** section | PNG, JPG, GIF, WebP | A small square thumbnail above the title, 40–88px. Cropped to a square with a rounded corner. |
 | **Two columns** section | PNG, JPG, GIF, WebP | A pictogram above each column's title, 28–56px. Not cropped and not rounded, so line art survives — transparent PNG again. |
 | Logo in **Colours** | PNG, JPG, GIF, WebP | Sets the project logo, for every template on that project. |
@@ -146,10 +147,10 @@ Already done for this project, but for the record — or to stand up a second on
    > document upload (the bucket originally allowed images only, at 5 MB, so a
    > PDF came back as a mime error), the `font` column on `project_brands`, and
    > the `is_live` column on `email_templates` that backs the Live / Draft
-   > switch, and the `social` column on `project_brands` that holds the
-   > per-project social links. The script is idempotent — `on conflict do update`
-   > widens the bucket in place, `add column if not exists` adds the columns, and
-   > no stored file or row is touched.
+   > switch, and the `social` and `stamp_url` columns on `project_brands`. The
+   > script is idempotent — `on conflict do update` widens the bucket in place,
+   > `add column if not exists` adds the columns, and no stored file or row is
+   > touched.
    >
    > Until `is_live` exists the switch simply does not appear: the first `400`
    > from PostgREST latches the column off and the template list is re-fetched
@@ -171,12 +172,13 @@ every policy, and that file is served to the browser.
 
 ## Using it
 
-1. **Pick a project** in the toolbar. Colours, logo and typeface swap; the
-   layout does not.
+1. **New template** asks which project first, because the project decides the
+   logo, typeface and colours every section renders with. Nothing is saved until
+   you hit **Save**. It starts from the standard decision-letter layout; delete
+   what you do not want.
 2. **The dropdown in the editor header** switches to any other saved template,
    grouped by project and marking which ones are live. It asks first if you have
-   unsaved changes. A new template starts from the standard decision-letter
-   layout; delete what you do not want.
+   unsaved changes.
 3. **Click a section** on the left to add it to the bottom of the email. Groups
    start folded, so the column opens as a list of headings — click one to open
    it. The search box matches a section's name, its description and a set of
@@ -198,6 +200,24 @@ Saves, upload failures and anything else transient appear as a toast at the
 bottom of the screen. Branding is edited from **Projects**, not from inside the
 editor — it applies to every template on the project, which is not a thing to
 change while you have one open.
+
+Every question the app asks is its own dialog, never `window.confirm`. The one
+exception is the browser's own "leave site?" prompt on a hard reload with unsaved
+work, which no web page is allowed to restyle.
+
+### Projects
+
+**Add project** creates one from the neutral eGovern palette. A project is just a
+row in `project_brands` — the four shipped ones have defaults in `theme.js` and
+need no row, anything you add exists only as that row. Which is why deleting an
+added project is the same button as resetting a shipped one, and why the button
+renames itself to **Delete project** when there are no defaults to fall back to.
+Templates filed under a deleted project are not themselves deleted.
+
+The **stamp or seal** is set here, alongside the logo, for the same reason the
+social links are: one organisation has one seal, and re-uploading it per template
+is how four slightly different scans of it end up in circulation. The Signature
+section then has a toggle to show it.
 
 ### Live / Draft
 

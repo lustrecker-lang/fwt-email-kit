@@ -93,13 +93,13 @@ var BLOCKS = [
     group: 'Media & panels',
     icon: 'image',
     keywords: 'picture photo hero banner upload',
-    desc: 'A single rounded image. Upload one, or leave it empty to fill from a merge field at send time.',
+    desc: 'A single rounded image. Upload one, or leave it empty to fill from a merge field at send time. Full bleed in the first slot runs edge to edge and takes the card\'s rounded top corners.',
     opts: {
         src: { label: 'Image', type: 'image', default: '' },
         bleed: { label: 'Full bleed', type: 'bool', default: false },
         ratio: { label: 'Height', type: 'select', choices: ['short', 'medium', 'tall', 'very tall', 'extra tall'], default: 'medium' }
     },
-    render: function (t, o) {
+    render: function (t, o, at) {
         /* Anything past "tall" is a portrait crop — a poster, a certificate, a
          * phone screenshot. object-fit:cover means the picture is cropped to
          * the box rather than squashed into it. */
@@ -108,10 +108,25 @@ var BLOCKS = [
         /* An uploaded image is baked in; without one the URL stays a merge field
          * so the same template can carry a different picture per send. */
         var src = assetUrl(o.src, '{{hero_image_url}}');
-        var img = '<img src="' + src + '" width="' + w + '" height="' + h + '" alt="{{hero_image_alt}}" style="display:block;border:0;outline:none;text-decoration:none;width:100%;max-width:' + w + 'px;height:' + h + 'px;object-fit:cover;' + (o.bleed ? '' : 'border-radius:' + t.radiusSm + 'px;') + '">';
-        return o.bleed
-            ? '<tr><td style="padding:32px 0 0 0;font-size:0;line-height:0;">' + img + '</td></tr>'
-            : '<tr><td class="px" style="' + pad(t, 32) + 'font-size:0;line-height:0;">' + img + '</td></tr>';
+
+        /* A full-bleed picture in the very first slot is the top of the email,
+         * so it loses the 32px of air above it and rounds with the card instead
+         * of sitting in a square notch inside it. The card also sets
+         * overflow:hidden, which clips it in clients that honour either; the
+         * radius here is what makes Gmail and Apple Mail do the right thing.
+         * Outlook rounds nothing at all, including the card, so it degrades
+         * consistently rather than oddly. */
+        var atTop = o.bleed && at && at.first;
+        var radius = atTop
+            ? 'border-radius:' + t.radius + 'px ' + t.radius + 'px 0 0;'
+            : (o.bleed ? '' : 'border-radius:' + t.radiusSm + 'px;');
+
+        var img = '<img src="' + src + '" width="' + w + '" height="' + h + '" alt="{{hero_image_alt}}" style="display:block;border:0;outline:none;text-decoration:none;width:100%;max-width:' + w + 'px;height:' + h + 'px;object-fit:cover;' + radius + '">';
+
+        if (o.bleed) {
+            return '<tr><td style="padding:' + (atTop ? '0' : '32px 0 0 0') + ';font-size:0;line-height:0;">' + img + '</td></tr>';
+        }
+        return '<tr><td class="px" style="' + pad(t, 32) + 'font-size:0;line-height:0;">' + img + '</td></tr>';
     }
 },
 {
@@ -299,12 +314,14 @@ var BLOCKS = [
     desc: 'Downloadable documents as hairline rows with a trailing link. Upload a file per row, or leave it empty to fill from a merge field at send time.',
     opts: {
         count: { label: 'Documents', type: 'select', choices: ['1', '2', '3'], default: '2' },
+        pill: { label: 'Pill buttons', type: 'bool', default: false },
         file1: { label: 'File 1', type: 'file', default: '' },
         file2: { label: 'File 2', type: 'file', default: '', showIf: function (o) { return parseInt(o.count, 10) >= 2; } },
         file3: { label: 'File 3', type: 'file', default: '', showIf: function (o) { return parseInt(o.count, 10) >= 3; } }
     },
     render: function (t, o) {
         var n = parseInt(o.count, 10);
+        var btnRadius = o.pill ? 100 : t.radiusBtn;
         var rows = '';
         for (var i = 1; i <= n; i++) {
             /* Upload a file and the row is fixed: real name, real weight, a
@@ -324,8 +341,8 @@ var BLOCKS = [
          * the point of the email, and a 14px underlined word next to a filename
          * loses to the CTA further up the page. */
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr>' +
-            '<td align="center" bgcolor="' + t.brand + '" style="border-radius:' + t.radiusBtn + 'px;">' +
-                '<a href="' + url + '" style="display:inline-block;padding:10px 20px;font-family:' + t.font + ';font-size:14px;line-height:18px;font-weight:600;color:' + t.brandText + ';text-decoration:none;white-space:nowrap;border-radius:' + t.radiusBtn + 'px;">Download</a>' +
+            '<td align="center" bgcolor="' + t.brand + '" style="border-radius:' + btnRadius + 'px;">' +
+                '<a href="' + url + '" style="display:inline-block;padding:10px 20px;font-family:' + t.font + ';font-size:14px;line-height:18px;font-weight:600;color:' + t.brandText + ';text-decoration:none;white-space:nowrap;border-radius:' + btnRadius + 'px;">Download</a>' +
             '</td>' +
         '</tr></table>' +
     '</td>' +
@@ -435,23 +452,24 @@ var BLOCKS = [
     group: 'Text',
     icon: 'signature',
     keywords: 'sign-off regards thanks sender closing name title stamp seal handwritten scan',
-    desc: 'Sign-off with sender name and title. Takes a scanned signature, and an optional stamp or seal beside it. Upload transparent PNGs so both sit on the card instead of in a white box.',
+    desc: 'Sign-off with sender name and title. Takes a scanned signature, and can show the project\'s official stamp beside it. Upload transparent PNGs so both sit on the card instead of in a white box.',
     opts: {
         closing: { label: 'Closing', type: 'select', choices: ['Thanks', 'Kind regards', 'Sincerely', 'Best regards'], default: 'Thanks' },
         sig: { label: 'Signature', type: 'image', default: '' },
         sigWidth: { label: 'Signature width', type: 'select', choices: ['120', '160', '200', '240'], default: '160' },
-        showStamp: { label: 'Stamp or seal', type: 'bool', default: false },
-        stamp: { label: 'Stamp', type: 'image', default: '', showIf: function (o) { return !!o.showStamp; } },
+        showStamp: { label: 'Project stamp', type: 'bool', default: false },
         stampWidth: { label: 'Stamp width', type: 'select', choices: ['80', '100', '120', '140'], default: '100', showIf: function (o) { return !!o.showStamp; } }
     },
     render: function (t, o) {
-        /* Neither mark is drawn until a file exists, and neither falls back to a
-         * merge field the way the hero image does — a signature and a seal are
-         * fixed assets of the sender, not something that varies per send.
+        /* The signature is per-email, because a letter is signed by whoever
+         * decided it. The stamp is per-project — one organisation has one seal,
+         * and re-uploading it on every template is how you end up with four
+         * slightly different scans of it in circulation. Set it under Projects.
          *
-         * No background colour is set on either image, so a transparent PNG
-         * shows the card through it. That is the whole reason to prefer one:
-         * a JPEG signature arrives as a white rectangle. */
+         * Neither falls back to a merge field the way the hero image does, and
+         * neither sets a background colour, so a transparent PNG shows the card
+         * through it. That is the whole reason to prefer one: a JPEG signature
+         * arrives as a white rectangle. */
         var sigUrl = assetUrl(o.sig, '');
         var sigW = parseInt(o.sigWidth, 10) || 160;
         var mark = sigUrl
@@ -463,7 +481,7 @@ var BLOCKS = [
             '<p style="margin:' + (mark ? '0' : '2px') + ' 0 0 0;' + font(t, 'body', t.text, 'font-weight:600;') + '">{{sender_name}}</p>' +
             '<p style="margin:0;' + font(t, 'small', t.textMuted) + '">{{sender_title}}</p>';
 
-        var stampUrl = o.showStamp ? assetUrl(o.stamp, '') : '';
+        var stampUrl = o.showStamp ? (t.stampUrl || '') : '';
         if (!stampUrl) {
             return '<tr><td class="px" style="' + pad(t, 32) + '">' + body + '</td></tr>';
         }

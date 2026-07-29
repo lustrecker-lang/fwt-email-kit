@@ -213,6 +213,7 @@ var Api = (function () {
                     key: b.key,
                     brand_name: b.brand_name || null,
                     logo_url: b.logo_url || null,
+                    stamp_url: b.stamp_url || null,
                     logo_width: b.logo_width || null,
                     font: b.font || null,
                     colors: b.colors || {},

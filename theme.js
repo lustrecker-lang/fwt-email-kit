@@ -27,7 +27,7 @@ var COLOR_ROLES = [
 
 var THEMES = {
     'egovern': {
-        label: 'eGovern (neutral)',
+        label: 'eGovern',
         brandName: 'eGovern',
         logoUrl: '',
         logoWidth: 130,
@@ -157,7 +157,7 @@ function fontStack(key) {
 var LAYOUT = {
     width: 600,
     radius: 16,       /* the card */
-    radiusSm: 12,     /* panels inside the card */
+    radiusSm: 18,     /* images and panels inside the card */
     radiusBtn: 8,
     pad: 40,          /* horizontal padding inside the card (24 on mobile) */
     font: FONT_STACKS[DEFAULT_FONT].stack
@@ -194,6 +194,9 @@ function makeTheme(key) {
         brandName: src.brandName,
         logoUrl: src.logoUrl,
         logoWidth: src.logoWidth,
+        /* The official stamp or seal, like the logo: one asset per organisation,
+         * not something re-uploaded on every letter that needs it. */
+        stampUrl: src.stampUrl || '',
         fontKey: src.font || DEFAULT_FONT,
         type: TYPE,
         social: {}
@@ -212,8 +215,13 @@ function makeTheme(key) {
     if (ov) {
         if (ov.brand_name) t.brandName = ov.brand_name;
         if (ov.logo_url != null) t.logoUrl = ov.logo_url;
+        if (ov.stamp_url != null) t.stampUrl = ov.stamp_url;
         if (ov.logo_width) t.logoWidth = ov.logo_width;
         if (ov.font) t.fontKey = ov.font;
+        /* A project created in the app has no THEMES entry to take a label from,
+         * so it borrows its own name. Without this every added project would be
+         * labelled "eGovern", the fallback theme it was cloned from. */
+        if (!THEMES[key]) t.label = ov.brand_name || key;
         for (var k in (ov.colors || {})) {
             if (Object.prototype.hasOwnProperty.call(ov.colors, k)) t[k] = ov.colors[k];
         }
@@ -231,14 +239,33 @@ function makeTheme(key) {
     return t;
 }
 
-/* Every project, defaults merged with whatever is saved. Drives the filter and
- * the project settings screen. */
+/* Every project, defaults merged with whatever is saved. Drives the filter, the
+ * project settings screen and the template switcher.
+ *
+ * The shipped four come from THEMES; anything else is a project someone added
+ * in the app, which exists only as a project_brands row. Both are listed, the
+ * shipped ones first, so adding a project does not reshuffle the list. */
 function allProjects() {
-    var out = [];
+    var out = [], seen = {};
     for (var k in THEMES) {
-        if (Object.prototype.hasOwnProperty.call(THEMES, k)) out.push({ key: k, theme: makeTheme(k) });
+        if (!Object.prototype.hasOwnProperty.call(THEMES, k)) continue;
+        seen[k] = true;
+        out.push({ key: k, theme: makeTheme(k) });
+    }
+    for (var o in BRAND_OVERRIDES) {
+        if (!Object.prototype.hasOwnProperty.call(BRAND_OVERRIDES, o) || seen[o]) continue;
+        out.push({ key: o, theme: makeTheme(o), custom: true });
     }
     return out;
+}
+
+/* A project key has to survive being put in a URL hash and a Postgres primary
+ * key, so it is slugged from the name rather than typed. */
+function projectKey(name) {
+    return String(name).toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40);
 }
 
 /* Shorthand for a type style, so blocks stay readable. */
