@@ -56,8 +56,9 @@ var SAMPLE = {
     help_url: '#', help_label: 'Visit the Help Centre', privacy_url: '#',
     sender_name: 'Marcia Alleyne', sender_title: 'Registrar',
     legal_note: 'You are receiving this because you hold an account with the Barbados Nursing Council.',
-    unsubscribe_url: '#', preferences_url: '#',
-    facebook_url: '#', instagram_url: '#', linkedin_url: '#'
+    unsubscribe_url: '#', preferences_url: '#'
+    /* No social_* entries: those are real URLs from the project's brand record
+     * now, not merge fields, so there is nothing here to stand in for them. */
 };
 
 /* Sample copy falls back to the unsuffixed field, so a duplicated block still

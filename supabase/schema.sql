@@ -85,12 +85,15 @@ create table if not exists project_brands (
     logo_width  integer,
     font        text,                      -- a key from FONT_STACKS in theme.js; null = shipped default
     colors      jsonb not null default '{}'::jsonb,
+    social      jsonb not null default '{}'::jsonb,  -- { facebook: url, instagram: url, ... }
     updated_at  timestamptz not null default now()
 );
 
 -- `create table if not exists` skips an existing table entirely, so a project
--- created before per-project fonts needs the column adding on its own.
+-- created before per-project fonts or social links needs the columns adding on
+-- their own.
 alter table project_brands add column if not exists font text;
+alter table project_brands add column if not exists social jsonb not null default '{}'::jsonb;
 
 drop trigger if exists project_brands_set_updated_at on project_brands;
 create trigger project_brands_set_updated_at

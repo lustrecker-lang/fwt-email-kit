@@ -215,7 +215,7 @@
 
     main { display: flex; flex: 1; min-height: 0; }
     .col { display: flex; flex-direction: column; min-height: 0; }
-    .col-palette { width: 254px; border-right: 1px solid var(--line); background: var(--panel); }
+    .col-palette { width: 228px; border-right: 1px solid var(--line); background: var(--panel); }
     .col-canvas  { flex: 1; min-width: 0; background: var(--bg); }
     .col-compose { width: 292px; border-left: 1px solid var(--line); background: var(--panel); }
     /* One height for all three column headers, so the palette's search box, the
@@ -255,7 +255,7 @@
     .group-head.shut .car { transform: rotate(0deg); }
 
     .block-card {
-        display: flex; align-items: flex-start; gap: 9px; width: 100%; text-align: left;
+        display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
         border: 1px solid transparent; border-radius: 9px; padding: 7px 8px;
         background: none; color: var(--ink); font-size: 13.5px; cursor: pointer;
         transition: background .1s;
@@ -264,18 +264,15 @@
         background: var(--accent-soft); border-color: var(--line);
         color: var(--ink); outline: none;
     }
-    .block-card .ic { flex-shrink: 0; color: var(--muted); margin-top: 2px; }
+    .block-card .ic { flex-shrink: 0; color: var(--muted); }
     .block-card .ic svg { width: 16px; height: 16px; display: block; }
     .block-card:hover .ic, .block-card:focus-visible .ic { color: var(--ink); }
-    .block-card .tx { flex: 1; min-width: 0; }
-    .block-card .nm { display: block; font-weight: 500; line-height: 1.3; }
-    .block-card .ds {
-        display: block; font-size: 11px; line-height: 1.35; color: var(--muted);
-        margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    .block-card .nm {
+        flex: 1; min-width: 0; font-weight: 500; line-height: 1.3;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .block-card .add {
-        flex-shrink: 0; font-size: 15px; line-height: 1; color: var(--muted);
-        margin-top: 3px; opacity: 0;
+        flex-shrink: 0; font-size: 15px; line-height: 1; color: var(--muted); opacity: 0;
     }
     .block-card:hover .add, .block-card:focus-visible .add { opacity: 1; }
 
@@ -466,6 +463,13 @@
                     on Windows cannot load them, so most people would get the fallback anyway.
                 </p>
             </div>
+            <h5>Social links</h5>
+            <div class="fields" id="bSocial"></div>
+            <p class="fnote" style="margin-bottom:26px">
+                Set once here, for every template on this project. The Marketing
+                footer renders only the networks that have a URL — leave one blank
+                and it is left out rather than shipping a dead link.
+            </p>
             <h5>Colours</h5>
             <div class="swatches" id="bSwatches"></div>
         </div>
@@ -692,7 +696,6 @@ var PALETTE_ICONS = {
     signature: '<path d="M2.4 11.2c1.6-6.2 3-6 3.4.4.3 4.4 1.9-5.2 3.2-1.2.6 1.9 1.6 1.1 2.8.8"/><path d="M2.4 13.9h11.2" opacity=".4"/>',
     button:    '<rect x="2.2" y="5" width="11.6" height="6" rx="3"/><path d="M5.6 8h4.8"/>',
     help:      '<circle cx="8" cy="8" r="5.6"/><path d="M6.4 6.3a1.65 1.65 0 013.25.42c0 1.1-1.65 1.35-1.65 2.45"/><path d="M8 11.4h.01" stroke-width="1.7"/>',
-    status:    '<circle cx="8" cy="8" r="5.6"/><path d="M5.7 8.2l1.7 1.7 3.1-3.7"/>',
     details:   '<path d="M2.4 4.6h4.4M9.6 4.6h4M2.4 8h4.4M9.6 8h4M2.4 11.4h4.4M9.6 11.4h4"/>',
     receipt:   '<path d="M4 2.6h8v10.8l-2-1.2-2 1.2-2-1.2-2 1.2z"/><path d="M6.2 5.8h3.6M6.2 8.4h3.6"/>',
     steps:     '<circle cx="3.7" cy="4" r="1.6"/><path d="M7.4 4h6.2"/><circle cx="3.7" cy="8" r="1.6"/><path d="M7.4 8h6.2"/><circle cx="3.7" cy="12" r="1.6"/><path d="M7.4 12h6.2"/>',
@@ -700,7 +703,6 @@ var PALETTE_ICONS = {
     image:     '<rect x="2.2" y="3.4" width="11.6" height="9.2" rx="1.8"/><circle cx="5.8" cy="6.8" r="1.1"/><path d="M2.6 11.6l3.4-3.1 2.4 2.2 2-1.8 3.2 3"/>',
     panel:     '<rect x="2.2" y="3.4" width="11.6" height="9.2" rx="1.8"/><path d="M4.8 7h6.4M4.8 9.8h4"/>',
     columns:   '<rect x="2.2" y="3.4" width="5" height="9.2" rx="1.4"/><rect x="8.8" y="3.4" width="5" height="9.2" rx="1.4"/>',
-    quote:     '<path d="M3.6 4.2v7.6" stroke-width="2.4"/><path d="M7 5.8h6.4M7 8.6h4.6M7 11.4h5.4"/>',
     divider:   '<path d="M2.2 4.2h9" opacity=".4"/><path d="M2.2 8h11.6"/><path d="M2.2 11.8h9" opacity=".4"/>',
     spacer:    '<path d="M2.2 3.4h11.6M2.2 12.6h11.6"/><path d="M8 5.6v4.8M6.3 7.1L8 5.4l1.7 1.7M6.3 8.9L8 10.6l1.7-1.7"/>',
     footer:    '<path d="M2.4 3.6h11.2M2.4 6.2h7.6" opacity=".4"/><rect x="2.2" y="9" width="11.6" height="4.4" rx="1.4"/>'
@@ -719,13 +721,6 @@ function paletteIcon(name) {
     return '<span class="ic" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" ' +
         'stroke="currentColor" stroke-width="1.4" stroke-linecap="round" ' +
         'stroke-linejoin="round">' + d + '</svg></span>';
-}
-
-/* First sentence of the block's own description — enough to tell Panel from
- * Status without hovering. The full text stays on the tooltip. */
-function blockBlurb(b) {
-    var m = /^([\s\S]*?[.!?])(\s|$)/.exec(b.desc || '');
-    return (m ? m[1] : (b.desc || '')).replace(/[.\s]+$/, '');
 }
 
 /* Name, group, description and the extra keywords, so "cta", "hr", "table" or
@@ -769,13 +764,13 @@ function renderPalette() {
         if (shut) return;
 
         html += hits.map(function (b) {
+            /* Just the name. The description is still searched, and still on the
+             * tooltip, but it is not worth a second line once you know the
+             * catalogue. */
             return '<button type="button" class="block-card" data-add="' + b.id + '"' +
                 ' title="' + esc(b.desc || b.name) + '">' +
                 paletteIcon(b.icon) +
-                '<span class="tx">' +
-                    '<span class="nm">' + esc(b.name) + '</span>' +
-                    '<span class="ds">' + esc(blockBlurb(b)) + '</span>' +
-                '</span>' +
+                '<span class="nm">' + esc(b.name) + '</span>' +
                 '<span class="add" aria-hidden="true">+</span>' +
             '</button>';
         }).join('');
@@ -886,7 +881,6 @@ function loadPreset(key) {
         var b = blockById(id);
         return b ? { uid: uidSeq++, blockId: id, opts: defaultOpts(b), open: false } : null;
     }).filter(Boolean);
-    if (p.tone) state.items.forEach(function (i) { if (i.blockId === 'status-callout') i.opts.tone = p.tone; });
     if (key === 'newsletter') state.items.forEach(function (i) { if (i.blockId === 'hero-image') i.opts.bleed = true; });
     renderAll();
 }
@@ -1157,21 +1151,47 @@ function openBrand(key) {
     var t = makeTheme(key);
     brandDraft = {
         key: key, brand_name: t.brandName, logo_url: t.logoUrl || '',
-        logo_width: t.logoWidth, font: t.fontKey, colors: {}
+        logo_width: t.logoWidth, font: t.fontKey, colors: {}, social: {}
     };
     var saved = BRAND_OVERRIDES[key];
     if (saved && saved.colors) {
         for (var c in saved.colors) brandDraft.colors[c] = saved.colors[c];
     }
+    /* Seeded from the resolved theme rather than the override, so a URL shipped
+     * as a default in theme.js shows up in the field instead of looking unset. */
+    SOCIAL_NETWORKS.forEach(function (n) {
+        brandDraft.social[n.key] = (t.social && t.social[n.key]) || '';
+    });
 
     document.getElementById('brandTitle').textContent = t.label;
     document.getElementById('bName').value = brandDraft.brand_name;
     document.getElementById('bLogo').value = brandDraft.logo_url;
     document.getElementById('bLogoW').value = brandDraft.logo_width;
     renderFontChoices();
+    renderSocialFields();
     renderBrandSwatches();
     renderBrandPreview();
 }
+
+/* Built from SOCIAL_NETWORKS, so adding a network in theme.js puts a field here
+ * and a link in the marketing footer with no further wiring. */
+function renderSocialFields() {
+    document.getElementById('bSocial').innerHTML = SOCIAL_NETWORKS.map(function (n) {
+        return '<div class="row">' +
+            '<label for="bSocial_' + n.key + '">' + esc(n.label) + '</label>' +
+            '<input type="text" id="bSocial_' + n.key + '" data-social="' + n.key + '"' +
+                ' placeholder="https://… (blank = hidden)"' +
+                ' value="' + esc(brandDraft.social[n.key] || '') + '">' +
+        '</div>';
+    }).join('');
+}
+
+document.getElementById('bSocial').addEventListener('input', function (e) {
+    var f = e.target.closest('[data-social]');
+    if (!f) return;
+    brandDraft.social[f.getAttribute('data-social')] = f.value.trim();
+    renderBrandPreview();
+});
 
 /* The picker is built from FONT_STACKS, so adding a stack in theme.js puts it
  * on this screen with no further wiring. */
@@ -1216,7 +1236,13 @@ function renderBrandSwatches() {
 
 function renderBrandPreview() {
     var t = brandTheme();
+    /* The marketing footer stands in for the transactional one here, because it
+     * is the only block that surfaces every project-level setting at once: the
+     * logo, the colours, the typeface and the social links. Editing a social URL
+     * with nothing on screen to show it would be a dead control. */
     var items = PRESETS.approved.blocks.map(function (id) {
+        return id === 'footer-transactional' ? 'footer-marketing' : id;
+    }).map(function (id) {
         var b = blockById(id);
         return b ? { blockId: id, opts: defaultOpts(b) } : null;
     }).filter(Boolean);

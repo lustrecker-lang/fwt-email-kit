@@ -163,15 +163,16 @@ var LAYOUT = {
     font: FONT_STACKS[DEFAULT_FONT].stack
 };
 
-/* Status tones. Flat tints, no borders — the border is what made the old set
- * look like a bootstrap alert. */
-var TONES = {
-    success: { bg: '#eef7f0', fg: '#1a7f43', text: '#14532d', label: 'Approved' },
-    warning: { bg: '#fdf5e8', fg: '#a06a12', text: '#733f0e', label: 'Action needed' },
-    danger:  { bg: '#fdf0ef', fg: '#b3261e', text: '#7f1d1b', label: 'Not approved' },
-    info:    { bg: '#eef2f8', fg: '#2b5c9b', text: '#1c3c68', label: 'Information' },
-    neutral: { bg: '#f4f4f5', fg: '#5f6368', text: '#33363b', label: 'Note' }
-};
+/* Social profiles belong to the organisation, not to one email, so they are
+ * configured once per project instead of being merge fields every send has to
+ * remember to pass. A network with no URL is simply not rendered. */
+var SOCIAL_NETWORKS = [
+    { key: 'facebook',  label: 'Facebook' },
+    { key: 'instagram', label: 'Instagram' },
+    { key: 'linkedin',  label: 'LinkedIn' },
+    { key: 'x',         label: 'X' },
+    { key: 'youtube',   label: 'YouTube' }
+];
 
 /* Saved per-project branding, loaded from the project_brands table at boot.
  * THEMES above are the shipped defaults; anything here wins over them. Keeping
@@ -195,8 +196,11 @@ function makeTheme(key) {
         logoWidth: src.logoWidth,
         fontKey: src.font || DEFAULT_FONT,
         type: TYPE,
-        tones: TONES
+        social: {}
     };
+    for (var s in (src.social || {})) {
+        if (Object.prototype.hasOwnProperty.call(src.social, s)) t.social[s] = src.social[s];
+    }
     for (var c in src.color) {
         if (Object.prototype.hasOwnProperty.call(src.color, c)) t[c] = src.color[c];
     }
@@ -212,6 +216,11 @@ function makeTheme(key) {
         if (ov.font) t.fontKey = ov.font;
         for (var k in (ov.colors || {})) {
             if (Object.prototype.hasOwnProperty.call(ov.colors, k)) t[k] = ov.colors[k];
+        }
+        /* Merged rather than replaced, so clearing one network's field does not
+         * wipe the others that were never touched. */
+        for (var sk in (ov.social || {})) {
+            if (Object.prototype.hasOwnProperty.call(ov.social, sk)) t.social[sk] = ov.social[sk];
         }
     }
 
@@ -248,6 +257,21 @@ function font(t, styleName, color, extra) {
  * gutter without touching any block. */
 function pad(t, top, bottom) {
     return 'padding:' + top + 'px ' + t.pad + 'px ' + (bottom || 0) + 'px ' + t.pad + 'px;';
+}
+
+/* The project mark at footer scale. Every footer offers this, because a footer
+ * with no mark at all reads as a leaked system email. Falls back to the brand
+ * name set in type when a project has not been given a logo yet, so it is
+ * never blank. */
+function footerMark(t, width, align) {
+    var w = parseInt(width, 10) || 90;
+    if (!t.logoUrl) {
+        return '<span style="' + font(t, 'small', t.text, 'font-weight:700;letter-spacing:-0.1px;') + '">' +
+            esc(t.brandName) + '</span>';
+    }
+    return '<img src="' + t.logoUrl + '" width="' + w + '" alt="' + esc(t.brandName) + '"' +
+        ' style="display:block;border:0;outline:none;text-decoration:none;width:' + w +
+        'px;max-width:100%;height:auto;' + (align === 'center' ? 'margin:0 auto;' : '') + '">';
 }
 
 /* ------------------------------------------------------- uploaded assets */

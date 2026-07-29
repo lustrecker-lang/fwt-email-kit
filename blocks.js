@@ -97,10 +97,13 @@ var BLOCKS = [
     opts: {
         src: { label: 'Image', type: 'image', default: '' },
         bleed: { label: 'Full bleed', type: 'bool', default: false },
-        ratio: { label: 'Height', type: 'select', choices: ['short', 'medium', 'tall'], default: 'medium' }
+        ratio: { label: 'Height', type: 'select', choices: ['short', 'medium', 'tall', 'very tall', 'extra tall'], default: 'medium' }
     },
     render: function (t, o) {
-        var h = { short: 160, medium: 220, tall: 300 }[o.ratio] || 220;
+        /* Anything past "tall" is a portrait crop — a poster, a certificate, a
+         * phone screenshot. object-fit:cover means the picture is cropped to
+         * the box rather than squashed into it. */
+        var h = { short: 160, medium: 220, tall: 300, 'very tall': 420, 'extra tall': 560 }[o.ratio] || 220;
         var w = o.bleed ? t.width : t.width - (t.pad * 2);
         /* An uploaded image is baked in; without one the URL stays a merge field
          * so the same template can carry a different picture per send. */
@@ -250,42 +253,12 @@ var BLOCKS = [
     }
 },
 {
-    id: 'status-callout',
-    name: 'Status',
-    group: 'Status & data',
-    icon: 'status',
-    keywords: 'approved rejected pending alert callout banner tone badge',
-    desc: 'Flat tinted panel, no border. Tones map to Pending / Approved / Rejected / Changes Requested.',
-    opts: {
-        tone: { label: 'Tone', type: 'select', choices: ['success', 'warning', 'danger', 'info', 'neutral'], default: 'success' },
-        showLabel: { label: 'Eyebrow label', type: 'bool', default: true },
-        showBody: { label: 'Body text', type: 'bool', default: true }
-    },
-    render: function (t, o) {
-        var tone = t.tones[o.tone] || t.tones.info;
-        var eyebrow = o.showLabel
-            ? '<p style="margin:0 0 6px 0;' + font(t, 'label', tone.fg, 'text-transform:uppercase;') + '">{{status_label}}</p>'
-            : '';
-        var body = o.showBody
-            ? '<p style="margin:6px 0 0 0;' + font(t, 'small', tone.text) + '">{{status_message}}</p>'
-            : '';
-        return '' +
-'<tr><td class="px" style="' + pad(t, 28) + '">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:' + tone.bg + ';border-radius:' + t.radiusSm + 'px;">' +
-        '<tr><td style="padding:20px 22px;">' + eyebrow +
-            '<p style="margin:0;' + font(t, 'heading', tone.text) + '">{{status_headline}}</p>' + body +
-        '</td></tr>' +
-    '</table>' +
-'</td></tr>';
-    }
-},
-{
     id: 'steps',
     name: 'Next steps',
     group: 'Status & data',
     icon: 'steps',
     keywords: 'numbered list what happens next instructions ordered',
-    desc: 'Numbered list with soft tinted numerals. For "what happens next".',
+    desc: 'Numbered list in soft tinted tiles. For "what happens next".',
     opts: {
         count: { label: 'Steps', type: 'select', choices: ['2', '3', '4', '5'], default: '3' },
         showHeading: { label: 'Heading', type: 'bool', default: true }
@@ -293,15 +266,19 @@ var BLOCKS = [
     render: function (t, o) {
         var n = parseInt(o.count, 10);
         var rows = '';
+        /* Rounded-square tiles rather than circles, and big enough to read as
+         * numerals instead of bullets: 34px at 17px type. A circle would be
+         * border-radius:17px on the same box. */
+        var box = 34, radius = 10;
         for (var i = 1; i <= n; i++) {
             rows += '' +
 '<tr>' +
-    '<td width="28" valign="top" style="padding:0 14px 18px 0;">' +
+    '<td width="' + box + '" valign="top" style="padding:0 16px 20px 0;">' +
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
-            '<td align="center" width="26" height="26" bgcolor="' + t.brandSoft + '" style="border-radius:13px;font-family:' + t.font + ';font-size:12px;font-weight:700;line-height:26px;color:' + t.brand + ';">' + i + '</td>' +
+            '<td align="center" width="' + box + '" height="' + box + '" bgcolor="' + t.brandSoft + '" style="width:' + box + 'px;height:' + box + 'px;border-radius:' + radius + 'px;font-family:' + t.font + ';font-size:17px;font-weight:700;line-height:' + box + 'px;color:' + t.brand + ';">' + i + '</td>' +
         '</tr></table>' +
     '</td>' +
-    '<td valign="top" style="padding:1px 0 18px 0;' + font(t, 'small', t.text) + '">{{step_' + i + '_text}}</td>' +
+    '<td valign="top" style="padding:5px 0 20px 0;' + font(t, 'small', t.text) + '">{{step_' + i + '_text}}</td>' +
 '</tr>';
         }
         var heading = o.showHeading
@@ -342,8 +319,15 @@ var BLOCKS = [
     '<td valign="middle" style="padding:16px 0;border-bottom:1px solid ' + t.hairline + ';' + font(t, 'small', t.text, 'font-weight:600;') + '">' + name +
         '<div style="' + font(t, 'micro', t.textMuted, 'padding-top:2px;') + '">' + meta + '</div>' +
     '</td>' +
-    '<td align="right" valign="middle" style="padding:16px 0;border-bottom:1px solid ' + t.hairline + ';">' +
-        '<a href="' + url + '" style="' + font(t, 'small', t.brand, 'font-weight:600;text-decoration:none;') + '">Download</a>' +
+    '<td align="right" valign="middle" style="padding:16px 0 16px 14px;border-bottom:1px solid ' + t.hairline + ';">' +
+        /* A solid pill, not a text link. On a decision letter the download IS
+         * the point of the email, and a 14px underlined word next to a filename
+         * loses to the CTA further up the page. */
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr>' +
+            '<td align="center" bgcolor="' + t.brand + '" style="border-radius:' + t.radiusBtn + 'px;">' +
+                '<a href="' + url + '" style="display:inline-block;padding:10px 20px;font-family:' + t.font + ';font-size:14px;line-height:18px;font-weight:600;color:' + t.brandText + ';text-decoration:none;white-space:nowrap;border-radius:' + t.radiusBtn + 'px;">Download</a>' +
+            '</td>' +
+        '</tr></table>' +
     '</td>' +
 '</tr>';
         }
@@ -358,21 +342,30 @@ var BLOCKS = [
     name: 'Panel',
     group: 'Media & panels',
     icon: 'panel',
-    keywords: 'card box surface secondary tint promo',
-    desc: 'A soft surface panel for a secondary message that should not compete with the CTA.',
+    keywords: 'card box surface secondary tint promo thumbnail icon image',
+    desc: 'A soft surface panel for a secondary message that should not compete with the CTA. Takes a small thumbnail above the title.',
     opts: {
         tinted: { label: 'Brand tint', type: 'bool', default: false },
+        img: { label: 'Thumbnail', type: 'image', default: '' },
+        imgSize: { label: 'Thumbnail size', type: 'select', choices: ['40', '56', '72', '88'], default: '56' },
         showLink: { label: 'Link', type: 'bool', default: true }
     },
     render: function (t, o) {
         var bg = o.tinted ? t.brandSoft : t.surface;
+        /* Sits top-left above the title, inside the panel's own padding, so the
+         * panel still reads as one object. Only drawn once a file exists. */
+        var thumbUrl = assetUrl(o.img, '');
+        var thumbSize = parseInt(o.imgSize, 10) || 56;
+        var thumb = thumbUrl
+            ? '<img src="' + thumbUrl + '" width="' + thumbSize + '" height="' + thumbSize + '" alt="" style="display:block;border:0;outline:none;text-decoration:none;width:' + thumbSize + 'px;height:' + thumbSize + 'px;object-fit:cover;border-radius:' + Math.round(thumbSize / 5) + 'px;margin:0 0 14px 0;">'
+            : '';
         var link = o.showLink
             ? '<div style="padding-top:10px;"><a href="{{panel_url}}" style="' + font(t, 'small', t.brand, 'font-weight:600;text-decoration:none;') + '">{{panel_link_label}} &rarr;</a></div>'
             : '';
         return '' +
 '<tr><td class="px" style="' + pad(t, 28) + '">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:' + bg + ';border-radius:' + t.radiusSm + 'px;">' +
-        '<tr><td style="padding:22px 24px;">' +
+        '<tr><td style="padding:22px 24px;">' + thumb +
             '<p style="margin:0;' + font(t, 'heading', t.text) + '">{{panel_title}}</p>' +
             '<p style="margin:6px 0 0 0;' + font(t, 'small', t.textMuted) + '">{{panel_text}}</p>' + link +
         '</td></tr>' +
@@ -385,18 +378,32 @@ var BLOCKS = [
     name: 'Two columns',
     group: 'Media & panels',
     icon: 'columns',
-    keywords: 'side by side split grid pair',
-    desc: 'Side-by-side pair that stacks on mobile.',
+    keywords: 'side by side split grid pair pictogram icon image',
+    desc: 'Side-by-side pair that stacks on mobile. Each side takes a small pictogram above its title.',
     opts: {
+        icon1: { label: 'Icon, left', type: 'image', default: '' },
+        icon2: { label: 'Icon, right', type: 'image', default: '' },
+        iconSize: { label: 'Icon size', type: 'select', choices: ['28', '36', '44', '56'], default: '36' },
         showLinks: { label: 'Links', type: 'bool', default: false }
     },
     render: function (t, o) {
+        /* Deliberately not square-cropped and not rounded: these are pictograms,
+         * usually a transparent PNG line drawing, and a radius on one of those
+         * clips the artwork. Height is left to the aspect ratio. */
+        var iconW = parseInt(o.iconSize, 10) || 36;
+        function pictogram(i) {
+            var url = assetUrl(o['icon' + i], '');
+            return url
+                ? '<img src="' + url + '" width="' + iconW + '" alt="" style="display:block;border:0;outline:none;text-decoration:none;width:' + iconW + 'px;max-width:100%;height:auto;margin:0 0 12px 0;">'
+                : '';
+        }
         function col(i) {
             var link = o.showLinks
                 ? '<div style="padding-top:8px;"><a href="{{col_' + i + '_url}}" style="' + font(t, 'small', t.brand, 'font-weight:600;text-decoration:none;') + '">{{col_' + i + '_link_label}}</a></div>'
                 : '';
             return '' +
 '<td class="stack" width="50%" valign="top" style="padding:0 ' + (i === 1 ? '14px' : '0') + ' 0 ' + (i === 2 ? '14px' : '0') + ';">' +
+    pictogram(i) +
     '<p style="margin:0;' + font(t, 'heading', t.text) + '">{{col_' + i + '_title}}</p>' +
     '<p style="margin:6px 0 0 0;' + font(t, 'small', t.textMuted) + '">{{col_' + i + '_text}}</p>' + link +
 '</td>';
@@ -404,31 +411,6 @@ var BLOCKS = [
         return '' +
 '<tr><td class="px" style="' + pad(t, 28) + '">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' + col(1) + col(2) + '</tr></table>' +
-'</td></tr>';
-    }
-},
-{
-    id: 'quote-note',
-    name: 'Reviewer note',
-    group: 'Media & panels',
-    icon: 'quote',
-    keywords: 'quote blockquote feedback comment reason rejection',
-    desc: 'Left-ruled quote. Built for surfacing reviewer feedback on a Changes Requested decision.',
-    opts: {
-        showAuthor: { label: 'Author', type: 'bool', default: true }
-    },
-    render: function (t, o) {
-        var author = o.showAuthor
-            ? '<p style="margin:10px 0 0 0;' + font(t, 'micro', t.textMuted) + '">{{note_author}} · {{note_author_title}}</p>'
-            : '';
-        return '' +
-'<tr><td class="px" style="' + pad(t, 28) + '">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' +
-        '<td width="2" style="background-color:' + t.brand + ';font-size:0;line-height:0;">&nbsp;</td>' +
-        '<td style="padding:0 0 0 20px;">' +
-            '<p style="margin:0;' + font(t, 'body', t.text) + '">{{note_text}}</p>' + author +
-        '</td>' +
-    '</tr></table>' +
 '</td></tr>';
     }
 },
@@ -542,9 +524,11 @@ var BLOCKS = [
     name: 'Transactional footer',
     group: 'Footer',
     icon: 'footer',
-    keywords: 'system receipt decision no unsubscribe do not reply address',
+    keywords: 'system receipt decision no unsubscribe do not reply address logo',
     desc: 'For system mail: receipts, decisions, resets. Sender identity and a do-not-reply notice — deliberately NO unsubscribe link.',
     opts: {
+        showLogo: { label: 'Brand logo', type: 'bool', default: true },
+        logoWidth: { label: 'Logo width', type: 'select', choices: ['70', '90', '110', '130'], default: '90', showIf: function (o) { return !!o.showLogo; } },
         showAddress: { label: 'Postal address', type: 'bool', default: true },
         showHelp: { label: 'Help link', type: 'bool', default: true }
     },
@@ -557,10 +541,14 @@ var BLOCKS = [
               '<a href="{{help_url}}" style="color:' + t.textMuted + ';text-decoration:underline;">Help Centre</a>' +
               ' &nbsp;·&nbsp; <a href="{{privacy_url}}" style="color:' + t.textMuted + ';text-decoration:underline;">Privacy</a></p>'
             : '';
+        var logo = o.showLogo
+            ? '<div style="padding:24px 0 0 0;">' + footerMark(t, o.logoWidth, 'left') + '</div>'
+            : '';
         return '' +
 '<tr><td class="px" style="' + pad(t, 40, 40) + '">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px;font-size:0;line-height:0;background-color:' + t.hairline + ';">&nbsp;</td></tr></table>' +
-    '<p style="margin:24px 0 0 0;' + font(t, 'small', t.text, 'font-weight:600;') + '">{{org_name}}</p>' +
+    logo +
+    '<p style="margin:' + (logo ? '14px' : '24px') + ' 0 0 0;' + font(t, 'small', t.text, 'font-weight:600;') + '">{{org_name}}</p>' +
     addr +
     '<p style="margin:12px 0 0 0;' + font(t, 'micro', t.textMuted) + '">This is an automated message about your account. Replies to this address are not monitored.</p>' +
     help +
@@ -572,18 +560,34 @@ var BLOCKS = [
     name: 'Marketing footer',
     group: 'Footer',
     icon: 'footer',
-    keywords: 'newsletter campaign unsubscribe preferences social legal bulk',
-    desc: 'For newsletters and campaigns. Unsubscribe, preferences and a postal address — all legally required for bulk mail.',
+    keywords: 'newsletter campaign unsubscribe preferences social legal bulk logo',
+    desc: 'For newsletters and campaigns. Unsubscribe, preferences and a postal address — all legally required for bulk mail. Social links come from the project, not from this email.',
     opts: {
+        showLogo: { label: 'Brand logo', type: 'bool', default: true },
+        logoWidth: { label: 'Logo width', type: 'select', choices: ['70', '90', '110', '130'], default: '90', showIf: function (o) { return !!o.showLogo; } },
         showSocial: { label: 'Social links', type: 'bool', default: true },
         showReason: { label: 'Why you got this', type: 'bool', default: true }
     },
     render: function (t, o) {
-        var social = o.showSocial
+        /* Real URLs from the project's brand record, not merge fields. A network
+         * with no URL configured is left out entirely rather than shipping a
+         * dead link, and if none are set the whole row disappears. Set them
+         * under Projects. */
+        var links = [];
+        if (o.showSocial) {
+            SOCIAL_NETWORKS.forEach(function (n) {
+                var url = t.social && t.social[n.key];
+                if (!url) return;
+                links.push('<a href="' + esc(url) + '" style="color:' + t.text +
+                    ';text-decoration:none;font-weight:600;">' + esc(n.label) + '</a>');
+            });
+        }
+        var social = links.length
             ? '<p style="margin:0 0 18px 0;' + font(t, 'small', t.textMuted) + '">' +
-              '<a href="{{facebook_url}}" style="color:' + t.text + ';text-decoration:none;font-weight:600;">Facebook</a>' +
-              ' &nbsp;&nbsp; <a href="{{instagram_url}}" style="color:' + t.text + ';text-decoration:none;font-weight:600;">Instagram</a>' +
-              ' &nbsp;&nbsp; <a href="{{linkedin_url}}" style="color:' + t.text + ';text-decoration:none;font-weight:600;">LinkedIn</a></p>'
+              links.join(' &nbsp;&nbsp; ') + '</p>'
+            : '';
+        var logo = o.showLogo
+            ? '<div style="padding:0 0 18px 0;">' + footerMark(t, o.logoWidth, 'center') + '</div>'
             : '';
         var reason = o.showReason
             ? '<p style="margin:12px 0 0 0;' + font(t, 'micro', t.textMuted) + '">{{legal_note}}</p>'
@@ -592,6 +596,7 @@ var BLOCKS = [
 '<tr><td class="px" align="center" style="' + pad(t, 40, 40) + '">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px;font-size:0;line-height:0;background-color:' + t.hairline + ';">&nbsp;</td></tr></table>' +
     '<div style="height:24px;font-size:0;line-height:0;">&nbsp;</div>' +
+    logo +
     social +
     '<p style="margin:0;' + font(t, 'small', t.text, 'font-weight:600;') + '">{{org_name}}</p>' +
     '<p style="margin:6px 0 0 0;' + font(t, 'micro', t.textMuted) + '">{{org_address}}</p>' +
@@ -609,12 +614,20 @@ var BLOCKS = [
     name: 'Minimal footer',
     group: 'Footer',
     icon: 'footer',
-    keywords: 'short one line verification code quiet',
+    keywords: 'short one line verification code quiet logo',
     desc: 'One quiet line. For short system mail like a verification code, where a full footer would outweigh the message.',
-    opts: {},
-    render: function (t) {
+    opts: {
+        showLogo: { label: 'Brand logo', type: 'bool', default: true },
+        logoWidth: { label: 'Logo width', type: 'select', choices: ['60', '70', '90', '110'], default: '70', showIf: function (o) { return !!o.showLogo; } }
+    },
+    render: function (t, o) {
+        /* Even here. A verification code with no mark on it is the shape of a
+         * phishing email, so the logo defaults on and just goes small. */
+        var logo = o.showLogo
+            ? '<div style="padding:0 0 14px 0;">' + footerMark(t, o.logoWidth, 'center') + '</div>'
+            : '';
         return '' +
-'<tr><td class="px" align="center" style="' + pad(t, 40, 40) + '">' +
+'<tr><td class="px" align="center" style="' + pad(t, 40, 40) + '">' + logo +
     '<p style="margin:0;' + font(t, 'micro', t.textMuted) + '">{{org_name}} &nbsp;·&nbsp; {{org_address}}</p>' +
 '</td></tr>';
     }
@@ -643,7 +656,11 @@ function renderDocument(t, blocksHtml) {
 '<![endif]-->\n' +
 '<style>\n' +
 '  body { margin:0; padding:0; width:100% !important; -webkit-text-size-adjust:100%; }\n' +
-'  table { border-collapse:collapse; }\n' +
+'  /* separate, not collapse. In the collapsed border model border-radius is a\n' +
+'     no-op, which is what drew a square stroke around every rounded button and\n' +
+'     squared off the tinted panels. border-spacing:0 keeps the layout tight,\n' +
+'     and cellspacing="0" on every table means Outlook never sees a gap. */\n' +
+'  table { border-collapse:separate; border-spacing:0; }\n' +
 '  img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }\n' +
 '  a { text-decoration:none; }\n' +
 '  @media only screen and (max-width:620px) {\n' +
@@ -689,12 +706,11 @@ function extractVariables(html) {
 var PRESETS = {
     'approved': {
         label: 'Application approved',
-        blocks: ['header-logo', 'hero-title', 'greeting', 'paragraph', 'status-callout', 'details-list', 'cta-button', 'steps', 'signature', 'footer-transactional']
+        blocks: ['header-logo', 'hero-title', 'greeting', 'paragraph', 'details-list', 'cta-button', 'steps', 'signature', 'footer-transactional']
     },
     'changes-requested': {
         label: 'Changes requested',
-        blocks: ['header-logo', 'hero-title', 'greeting', 'paragraph', 'status-callout', 'quote-note', 'cta-button', 'help-prompt', 'signature', 'footer-transactional'],
-        tone: 'warning'
+        blocks: ['header-logo', 'hero-title', 'greeting', 'paragraph', 'cta-button', 'help-prompt', 'signature', 'footer-transactional']
     },
     'receipt': {
         label: 'Payment receipt',

@@ -79,7 +79,7 @@ editable.
 
 **Pictures and files.** Expand a section and hit **Upload**, or drag the file
 straight onto the slot. It goes to Supabase Storage and comes back as a
-permanent public URL, already filled in. Five places take an upload:
+permanent public URL, already filled in. Seven places take an upload:
 
 | Where | Takes | Notes |
 | --- | --- | --- |
@@ -87,6 +87,8 @@ permanent public URL, already filled in. Five places take an upload:
 | **Logo** section | PNG, JPG, GIF, WebP | Overrides the project logo for this one template — a department mark or a campaign lockup. Leave it empty and the project logo is used. |
 | **Documents** section | PDF, Word, Excel, CSV, TXT, ZIP, or an image | One file per row. Upload slots appear and disappear with the row count. |
 | **Signature** section | PNG, JPG, GIF, WebP | A scanned signature, and an optional stamp or seal beside it. Use **transparent PNGs** — a JPEG arrives as a white rectangle sitting on the card. |
+| **Panel** section | PNG, JPG, GIF, WebP | A small square thumbnail above the title, 40–88px. Cropped to a square with a rounded corner. |
+| **Two columns** section | PNG, JPG, GIF, WebP | A pictogram above each column's title, 28–56px. Not cropped and not rounded, so line art survives — transparent PNG again. |
 | Logo in **Colours** | PNG, JPG, GIF, WebP | Sets the project logo, for every template on that project. |
 
 Upload a document and the row is fixed: it shows the real filename, the real
@@ -144,9 +146,10 @@ Already done for this project, but for the record — or to stand up a second on
    > document upload (the bucket originally allowed images only, at 5 MB, so a
    > PDF came back as a mime error), the `font` column on `project_brands`, and
    > the `is_live` column on `email_templates` that backs the Live / Draft
-   > switch. The script is idempotent — `on conflict do update` widens the bucket
-   > in place, `add column if not exists` adds the columns, and no stored file or
-   > row is touched.
+   > switch, and the `social` column on `project_brands` that holds the
+   > per-project social links. The script is idempotent — `on conflict do update`
+   > widens the bucket in place, `add column if not exists` adds the columns, and
+   > no stored file or row is touched.
    >
    > Until `is_live` exists the switch simply does not appear: the first `400`
    > from PostgREST latches the column off and the template list is re-fetched
@@ -362,6 +365,17 @@ Putting an unsubscribe link on genuinely transactional mail invites people to
 opt out of messages they need. Putting bulk mail out *without* one breaches
 CAN-SPAM and most equivalents.
 
+All three carry the project's logo, on by default and sized down to as little as
+60px. A footer with no mark on it is the shape of a phishing email, which is
+exactly the wrong signal on a verification code. If the project has no logo set,
+the mark falls back to its name in type rather than rendering nothing.
+
+**Social links are set per project**, under **Projects → Social links**, not per
+email. They are a property of the organisation and the same on every send, so
+making them merge fields only created five more things for engineering to pass
+correctly. A network with no URL is left out of the footer rather than shipping a
+dead link; leave them all blank and the row disappears.
+
 ---
 
 ## Handing off to engineering
@@ -405,7 +419,7 @@ the real, suffixed names, so copy from there rather than guessing.
 | `index.html` | The composer. Build, theme, upload, save, export. Nothing brand-specific lives here. |
 | `library.html` | The shared read-only link. Browse, preview, copy HTML, read merge fields. |
 | `blocks.js` | **The catalogue.** Every section, plus the document shell and the variable extractor. Edit this to add a section. |
-| `theme.js` | Colour roles, font stacks, per-project themes, the type scale, layout constants, status tones, and the block-authoring helpers. |
+| `theme.js` | Colour roles, font stacks, per-project themes, the type scale, layout constants, the social network list, and the block-authoring helpers. |
 | `api.js` | Supabase access — auth, templates, uploads and the allow-list they are checked against. Plain `fetch`, no SDK. |
 | `config.js` | Project URL and publishable key. Safe to commit. |
 | `supabase/schema.sql` | The whole backend: one table, its policies, one bucket. |

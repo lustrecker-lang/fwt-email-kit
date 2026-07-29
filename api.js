@@ -215,7 +215,8 @@ var Api = (function () {
                     logo_url: b.logo_url || null,
                     logo_width: b.logo_width || null,
                     font: b.font || null,
-                    colors: b.colors || {}
+                    colors: b.colors || {},
+                    social: b.social || {}
                 })
             });
         }).then(check).then(function (rows) { return rows[0]; });
