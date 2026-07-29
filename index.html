@@ -957,7 +957,9 @@ function renderCompose() {
 
 function renderPreview() {
     var doc = buildDocument();
-    document.getElementById('preview').srcdoc = state.fill ? fillSample(doc) : doc;
+    /* The theme goes in so {{org_name}} previews as this template's project
+     * rather than a hardcoded agency. */
+    document.getElementById('preview').srcdoc = state.fill ? fillSample(doc, currentTheme()) : doc;
     var kb = (new Blob([doc]).size / 1024).toFixed(1);
     document.getElementById('statusLine').textContent =
         state.items.length + ' section' + (state.items.length === 1 ? '' : 's') + '  ·  ' + kb + ' KB' +
@@ -1381,7 +1383,9 @@ function renderBrandPreview() {
         if (id === 'signature') opts.showStamp = true;
         return { blockId: id, opts: opts };
     }).filter(Boolean);
-    document.getElementById('brandPreview').srcdoc = fillSample(renderItems(t, items));
+    /* `t` is the draft theme, so renaming the project updates the footer here
+     * as you type. */
+    document.getElementById('brandPreview').srcdoc = fillSample(renderItems(t, items), t);
 }
 
 document.getElementById('bSwatches').addEventListener('input', function (e) {

@@ -191,7 +191,8 @@ every policy, and that file is served to the browser.
    Paragraph blocks can differ. Upload slots live here: click **Upload**, or
    drag a picture or document onto the slot.
 6. **Real text / Placeholders** switches between seeing it as a recipient would
-   and seeing the raw `{{ }}` template you are about to ship.
+   and seeing the raw `{{ }}` template you are about to ship. The filler comes
+   from `sample.js` and never ships — see below for why it is not lorem ipsum.
 7. **Export** opens both outputs: the **HTML** to paste into SendGrid, and the
    **Merge fields** JSON to pass as `dynamic_template_data`.
 
@@ -424,6 +425,23 @@ await sgMail.send({
 
 Any placeholder you do not supply renders as literal `{{ }}` text in the
 delivered email, so treat the Variables list as a required checklist.
+
+### Why the preview copy is not lorem ipsum
+
+The preview exists to prove the layout holds, and layout breaks on the *shape* of
+a string, not its meaning. Whether `BBD $150.00` still fits the right-hand column
+once the item name runs long. Whether `REF-2026-04817` wraps under its own label
+in a Details row. Whether a four-word button label pushes the pill past the
+gutter. Latin has no digits, no currency and no dates, so it would hide every one
+of those. It also reads as texture rather than language, which means you stop
+noticing that a title is two words too long.
+
+So `sample.js` is realistic, but deliberately generic — the copy is shared by
+every project and none of it belongs to one agency. The exception is the sender's
+identity: `{{org_name}}` and the marketing footer's legal line come from the
+project's own brand record via `sampleIdentity()`, so a SmartFinance preview is
+signed by SmartFinance. Pass a theme as the second argument to `fillSample()` and
+you get that; omit it and you get neutral fallbacks.
 
 **Repeated sections get numbered fields.** Two Paragraph blocks emit
 `{{body_text}}` and `{{body_text_2}}`, not the same field twice — otherwise
