@@ -13,9 +13,15 @@ create table if not exists email_templates (
     html                text not null,          -- rendered output, ready to paste into SendGrid
     variables           text[] not null default '{}',
     sendgrid_template_id text,                  -- filled in later by the sync script
+    is_live             boolean not null default false,  -- in production, vs. still a draft
     created_at          timestamptz not null default now(),
     updated_at          timestamptz not null default now()
 );
+
+-- `create table if not exists` skips an existing table entirely, so a database
+-- created before the live flag needs the column adding on its own. New drafts
+-- default to false: nothing goes live until someone says so.
+alter table email_templates add column if not exists is_live boolean not null default false;
 
 -- One name per project, so saving the same template twice updates rather than duplicates.
 create unique index if not exists email_templates_project_name_idx
@@ -23,6 +29,9 @@ create unique index if not exists email_templates_project_name_idx
 
 create index if not exists email_templates_project_idx
     on email_templates (project);
+
+create index if not exists email_templates_is_live_idx
+    on email_templates (is_live);
 
 -- Keep updated_at honest.
 create or replace function set_updated_at()

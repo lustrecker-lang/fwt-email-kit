@@ -5,16 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Email Library</title>
 <style>
+    /* Greyscale by design — see the note in index.html. The accent is ink, so
+     * nothing here competes with the email in the preview pane. */
     :root {
         --bg: #f5f6f8; --panel: #ffffff; --ink: #16181d; --muted: #737a85;
-        --line: #e4e7ec; --accent: #1d4ed8; --accent-soft: #eef2ff;
+        --line: #e4e7ec; --accent: #16181d; --accent-soft: #eceef1;
+        --on-accent: #ffffff;
+        --live: #15803d; --live-soft: #f0f7f2; --live-line: #c2e2cc;
         --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     @media (prefers-color-scheme: dark) {
         :root {
             --bg: #14161a; --panel: #1c1f25; --ink: #e8eaed; --muted: #99a0aa;
-            --line: #2c3037; --accent: #7c9cff; --accent-soft: #232838;
+            --line: #2c3037; --accent: #e8eaed; --accent-soft: #2a2f37;
+            --on-accent: #14161a;
+            --live: #57c98a; --live-soft: #18271e; --live-line: #2f4a39;
         }
     }
     * { box-sizing: border-box; }
@@ -39,11 +45,11 @@
         border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
     }
     button:hover { border-color: var(--accent); color: var(--accent); }
-    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-    button.primary:hover { opacity: .9; color: #fff; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+    button.primary:hover { opacity: .9; color: var(--on-accent); }
     .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
     .seg button { border: 0; border-radius: 0; padding: 6px 13px; font-size: 12.5px; }
-    .seg button.on { background: var(--accent); color: #fff; }
+    .seg button.on { background: var(--accent); color: var(--on-accent); }
 
     main { display: flex; flex: 1; min-height: 0; }
     .list {
@@ -59,6 +65,15 @@
     .row.on { background: var(--accent-soft); }
     .row .n { font-size: 13.5px; font-weight: 500; }
     .row .d { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+
+    /* Read-only mirror of the composer's live switch. Green is a status, not a
+       brand colour — the rest of this page is deliberately greyscale. */
+    .live {
+        display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 100px;
+        font-size: 9.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+        line-height: 15px; color: var(--live); background: var(--live-soft);
+        border: 1px solid var(--live-line); white-space: nowrap;
+    }
 
     .detail { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     .bar {
@@ -137,8 +152,10 @@ function renderList() {
         return (r.name + ' ' + (r.description || '') + ' ' + r.project).toLowerCase().indexOf(q) !== -1;
     });
 
+    var liveCount = rows.filter(function (r) { return r.is_live; }).length;
     document.getElementById('count').textContent =
-        shown.length + ' of ' + rows.length + ' template' + (rows.length === 1 ? '' : 's');
+        shown.length + ' of ' + rows.length + ' template' + (rows.length === 1 ? '' : 's') +
+        (liveCount ? '  ·  ' + liveCount + ' live' : '');
 
     if (!shown.length) {
         document.getElementById('list').innerHTML =
@@ -156,8 +173,9 @@ function renderList() {
     document.getElementById('list').innerHTML = groups.map(function (g) {
         return '<div class="grp">' + projectLabel(g) + '</div>' + byGroup[g].map(function (r) {
             return '<div class="row' + (current && current.id === r.id ? ' on' : '') + '" data-id="' + r.id + '">' +
-                '<div class="n">' + r.name + '</div>' +
-                (r.description ? '<div class="d">' + r.description + '</div>' : '') +
+                '<div class="n">' + esc(r.name) +
+                    (r.is_live ? '<span class="live">Live</span>' : '') + '</div>' +
+                (r.description ? '<div class="d">' + esc(r.description) + '</div>' : '') +
             '</div>';
         }).join('');
     }).join('');
@@ -179,7 +197,8 @@ function show(id) {
         if (!t) return;
         current = t;
         document.getElementById('bar').style.display = 'flex';
-        document.getElementById('tTitle').textContent = t.name;
+        document.getElementById('tTitle').innerHTML = esc(t.name) +
+            (t.is_live ? '<span class="live">Live</span>' : '');
         document.getElementById('frame').srcdoc = t.html;
         document.getElementById('viewHtml').textContent = t.html;
         document.getElementById('viewVars').innerHTML = (t.variables || []).length

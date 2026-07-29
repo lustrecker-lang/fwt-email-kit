@@ -15,6 +15,24 @@
  * Signature: render(t, o) -> html   (t = theme, o = this block's options)
  */
 
+/* Palette groups, in the order an email is actually assembled top to bottom.
+ * Kept small on purpose — a group of fourteen is a list you read, a group of
+ * four is a list you scan. renderPalette() uses this for ordering and appends
+ * any group not named here, so adding a block cannot make it disappear.
+ *
+ * Each block also carries `icon` (a key into PALETTE_ICONS in index.html) and
+ * `keywords` — extra search terms for the words people type but the block is
+ * not called, e.g. "cta" for Button or "attachment" for Documents. */
+var BLOCK_GROUPS = [
+    'Header',
+    'Text',
+    'Buttons & links',
+    'Status & data',
+    'Media & panels',
+    'Spacing',
+    'Footer'
+];
+
 var BLOCKS = [
 
 /* ================================================================= HEADER */
@@ -22,6 +40,8 @@ var BLOCKS = [
     id: 'header-logo',
     name: 'Logo',
     group: 'Header',
+    icon: 'logo',
+    keywords: 'brand mark masthead image wordmark',
     desc: 'The mark, small and quiet. Left-aligned by default — centred logos read as marketing. Uses the project logo unless you upload one here.',
     opts: {
         logo: { label: 'Logo', type: 'image', default: '' },
@@ -45,6 +65,8 @@ var BLOCKS = [
     id: 'header-rule',
     name: 'Brand keyline',
     group: 'Header',
+    icon: 'keyline',
+    keywords: 'rule line bar top accent stripe',
     desc: 'A hairline of brand colour across the very top of the card. The lightest possible branding.',
     opts: {
         weight: { label: 'Weight', type: 'select', choices: ['2', '3', '4', '6'], default: '3' }
@@ -55,10 +77,15 @@ var BLOCKS = [
 },
 
 /* ================================================================ CONTENT */
+/* These banners are the shape of the file, not the shape of the palette — the
+ * body blocks below are spread across Text, Buttons & links, Status & data and
+ * Media & panels. Each block's own `group` is what the palette reads. */
 {
     id: 'hero-title',
     name: 'Title',
-    group: 'Content',
+    group: 'Text',
+    icon: 'title',
+    keywords: 'headline heading h1 subject subtitle',
     desc: 'The headline. Large, tightly tracked, with room to breathe above it.',
     opts: {
         size: { label: 'Size', type: 'select', choices: ['display', 'title'], default: 'display' },
@@ -78,7 +105,9 @@ var BLOCKS = [
 {
     id: 'hero-image',
     name: 'Image',
-    group: 'Content',
+    group: 'Media & panels',
+    icon: 'image',
+    keywords: 'picture photo hero banner upload',
     desc: 'A single rounded image. Upload one, or leave it empty to fill from a merge field at send time.',
     opts: {
         src: { label: 'Image', type: 'image', default: '' },
@@ -100,7 +129,9 @@ var BLOCKS = [
 {
     id: 'greeting',
     name: 'Greeting',
-    group: 'Content',
+    group: 'Text',
+    icon: 'greeting',
+    keywords: 'hello hi dear salutation first name',
     desc: 'Salutation. Keep the variable name identical across every project.',
     opts: {
         form: { label: 'Form', type: 'select', choices: ['Hi', 'Hello', 'Dear'], default: 'Hi' }
@@ -115,7 +146,9 @@ var BLOCKS = [
 {
     id: 'paragraph',
     name: 'Paragraph',
-    group: 'Content',
+    group: 'Text',
+    icon: 'paragraph',
+    keywords: 'body copy text sentence message',
     desc: 'Body copy at a comfortable reading size. Stack several for longer messages.',
     opts: {
         size: { label: 'Size', type: 'select', choices: ['body', 'lead', 'small'], default: 'body' },
@@ -131,7 +164,9 @@ var BLOCKS = [
 {
     id: 'cta-button',
     name: 'Button',
-    group: 'Content',
+    group: 'Buttons & links',
+    icon: 'button',
+    keywords: 'cta call to action link primary',
     desc: 'Table-based so Outlook honours the padding. One per email, ideally.',
     opts: {
         align: { label: 'Alignment', type: 'select', choices: ['left', 'center'], default: 'left' },
@@ -158,7 +193,9 @@ var BLOCKS = [
 {
     id: 'details-list',
     name: 'Details',
-    group: 'Content',
+    group: 'Status & data',
+    icon: 'details',
+    keywords: 'table rows label value summary reference number',
     desc: 'Label/value rows separated by hairlines. No box — the whitespace does the work.',
     opts: {
         rows: { label: 'Rows', type: 'select', choices: ['2', '3', '4', '5', '6'], default: '4' },
@@ -195,7 +232,9 @@ var BLOCKS = [
 {
     id: 'receipt',
     name: 'Receipt',
-    group: 'Content',
+    group: 'Status & data',
+    icon: 'receipt',
+    keywords: 'payment invoice total fee amount price line items',
     desc: 'Line items with a bold total. For payment confirmations and fee receipts.',
     opts: {
         items: { label: 'Line items', type: 'select', choices: ['1', '2', '3', '4'], default: '2' },
@@ -228,7 +267,9 @@ var BLOCKS = [
 {
     id: 'status-callout',
     name: 'Status',
-    group: 'Content',
+    group: 'Status & data',
+    icon: 'status',
+    keywords: 'approved rejected pending alert callout banner tone badge',
     desc: 'Flat tinted panel, no border. Tones map to Pending / Approved / Rejected / Changes Requested.',
     opts: {
         tone: { label: 'Tone', type: 'select', choices: ['success', 'warning', 'danger', 'info', 'neutral'], default: 'success' },
@@ -256,7 +297,9 @@ var BLOCKS = [
 {
     id: 'steps',
     name: 'Next steps',
-    group: 'Content',
+    group: 'Status & data',
+    icon: 'steps',
+    keywords: 'numbered list what happens next instructions ordered',
     desc: 'Numbered list with soft tinted numerals. For "what happens next".',
     opts: {
         count: { label: 'Steps', type: 'select', choices: ['2', '3', '4', '5'], default: '3' },
@@ -288,7 +331,9 @@ var BLOCKS = [
 {
     id: 'document-list',
     name: 'Documents',
-    group: 'Content',
+    group: 'Status & data',
+    icon: 'documents',
+    keywords: 'files attachment download pdf certificate upload',
     desc: 'Downloadable documents as hairline rows with a trailing link. Upload a file per row, or leave it empty to fill from a merge field at send time.',
     opts: {
         count: { label: 'Documents', type: 'select', choices: ['1', '2', '3'], default: '2' },
@@ -326,7 +371,9 @@ var BLOCKS = [
 {
     id: 'feature-panel',
     name: 'Panel',
-    group: 'Content',
+    group: 'Media & panels',
+    icon: 'panel',
+    keywords: 'card box surface secondary tint promo',
     desc: 'A soft surface panel for a secondary message that should not compete with the CTA.',
     opts: {
         tinted: { label: 'Brand tint', type: 'bool', default: false },
@@ -351,7 +398,9 @@ var BLOCKS = [
 {
     id: 'two-column',
     name: 'Two columns',
-    group: 'Content',
+    group: 'Media & panels',
+    icon: 'columns',
+    keywords: 'side by side split grid pair',
     desc: 'Side-by-side pair that stacks on mobile.',
     opts: {
         showLinks: { label: 'Links', type: 'bool', default: false }
@@ -376,7 +425,9 @@ var BLOCKS = [
 {
     id: 'quote-note',
     name: 'Reviewer note',
-    group: 'Content',
+    group: 'Media & panels',
+    icon: 'quote',
+    keywords: 'quote blockquote feedback comment reason rejection',
     desc: 'Left-ruled quote. Built for surfacing reviewer feedback on a Changes Requested decision.',
     opts: {
         showAuthor: { label: 'Author', type: 'bool', default: true }
@@ -399,7 +450,9 @@ var BLOCKS = [
 {
     id: 'help-prompt',
     name: 'Help prompt',
-    group: 'Content',
+    group: 'Buttons & links',
+    icon: 'help',
+    keywords: 'support contact question need a hand link',
     desc: 'A quiet "need a hand?" line above the footer. Reduces reply-to-sender traffic.',
     opts: {},
     render: function (t) {
@@ -412,7 +465,9 @@ var BLOCKS = [
 {
     id: 'signature',
     name: 'Signature',
-    group: 'Content',
+    group: 'Text',
+    icon: 'signature',
+    keywords: 'sign-off regards thanks sender closing name title',
     desc: 'Sign-off with sender name and title.',
     opts: {
         closing: { label: 'Closing', type: 'select', choices: ['Thanks', 'Kind regards', 'Sincerely', 'Best regards'], default: 'Thanks' }
@@ -432,6 +487,8 @@ var BLOCKS = [
     id: 'divider',
     name: 'Divider',
     group: 'Spacing',
+    icon: 'divider',
+    keywords: 'rule hr line separator hairline break',
     desc: 'Hairline rule, inset to the gutter or full width.',
     opts: {
         bleed: { label: 'Full bleed', type: 'bool', default: false },
@@ -448,6 +505,8 @@ var BLOCKS = [
     id: 'spacer',
     name: 'Spacer',
     group: 'Spacing',
+    icon: 'spacer',
+    keywords: 'gap whitespace padding height blank room',
     desc: 'Vertical whitespace. Use instead of empty paragraphs.',
     opts: {
         height: { label: 'Height', type: 'select', choices: ['8', '16', '24', '32', '48'], default: '24' }
@@ -462,6 +521,8 @@ var BLOCKS = [
     id: 'footer-transactional',
     name: 'Transactional footer',
     group: 'Footer',
+    icon: 'footer',
+    keywords: 'system receipt decision no unsubscribe do not reply address',
     desc: 'For system mail: receipts, decisions, resets. Sender identity and a do-not-reply notice — deliberately NO unsubscribe link.',
     opts: {
         showAddress: { label: 'Postal address', type: 'bool', default: true },
@@ -490,6 +551,8 @@ var BLOCKS = [
     id: 'footer-marketing',
     name: 'Marketing footer',
     group: 'Footer',
+    icon: 'footer',
+    keywords: 'newsletter campaign unsubscribe preferences social legal bulk',
     desc: 'For newsletters and campaigns. Unsubscribe, preferences and a postal address — all legally required for bulk mail.',
     opts: {
         showSocial: { label: 'Social links', type: 'bool', default: true },
@@ -525,6 +588,8 @@ var BLOCKS = [
     id: 'footer-minimal',
     name: 'Minimal footer',
     group: 'Footer',
+    icon: 'footer',
+    keywords: 'short one line verification code quiet',
     desc: 'One quiet line. For short system mail like a verification code, where a full footer would outweigh the message.',
     opts: {},
     render: function (t) {

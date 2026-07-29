@@ -5,16 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Email Kit</title>
 <style>
+    /* No brand colour. The accent is simply ink — the UI is greyscale, so the
+     * only colour on screen belongs to the email being built, or to a status
+     * (live, error, success). --on-accent is whatever sits legibly on top of
+     * --accent, which inverts in dark mode. */
     :root {
         --bg: #f5f6f8; --panel: #ffffff; --ink: #16181d; --muted: #737a85;
-        --line: #e4e7ec; --accent: #1d4ed8; --accent-soft: #eef2ff;
+        --line: #e4e7ec; --accent: #16181d; --accent-soft: #eceef1;
+        --on-accent: #ffffff;
+        --live: #15803d; --live-soft: #f0f7f2; --live-line: #c2e2cc;
         --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     @media (prefers-color-scheme: dark) {
         :root {
             --bg: #14161a; --panel: #1c1f25; --ink: #e8eaed; --muted: #99a0aa;
-            --line: #2c3037; --accent: #7c9cff; --accent-soft: #232838;
+            --line: #2c3037; --accent: #e8eaed; --accent-soft: #2a2f37;
+            --on-accent: #14161a;
+            --live: #57c98a; --live-soft: #18271e; --live-line: #2f4a39;
         }
     }
     * { box-sizing: border-box; }
@@ -32,8 +40,8 @@
         border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
     }
     button:hover { border-color: var(--accent); color: var(--accent); }
-    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-    button.primary:hover { opacity: .9; color: #fff; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+    button.primary:hover { opacity: .9; color: var(--on-accent); }
     button:disabled { opacity: .5; cursor: default; }
     button:disabled:hover { border-color: var(--line); color: var(--ink); }
     .linkbtn {
@@ -112,6 +120,22 @@
     .card .nm small { font-size: 12.5px; color: var(--muted); display: block; margin-top: 2px; }
     .card .when { font-size: 12px; color: var(--muted); white-space: nowrap; }
     .card .acts { display: flex; gap: 4px; }
+
+    /* Live / draft switch. Green is a status, not a brand colour — it is the
+       one thing on the templates screen allowed to be coloured, because it is
+       the one thing that says "recipients are receiving this". */
+    .livetog {
+        display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+        padding: 4px 11px 4px 9px; border-radius: 100px; border: 1px solid var(--line);
+        background: var(--panel); color: var(--muted); font-size: 11px; font-weight: 700;
+        letter-spacing: .5px; text-transform: uppercase; cursor: pointer; line-height: 18px;
+    }
+    .livetog i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+    .livetog:hover { border-color: var(--accent); color: var(--ink); }
+    .livetog.on { color: var(--live); border-color: var(--live-line); background: var(--live-soft); }
+    .livetog.on:hover { border-color: var(--live); color: var(--live); }
+    .livetog:disabled { cursor: default; opacity: .45; }
+    .livetog:disabled:hover { border-color: var(--line); }
     .iconbtn {
         border: 0; background: none; color: var(--muted); font-size: 14px;
         padding: 5px 7px; border-radius: 6px; cursor: pointer; line-height: 1;
@@ -189,36 +213,74 @@
 
     main { display: flex; flex: 1; min-height: 0; }
     .col { display: flex; flex-direction: column; min-height: 0; }
-    .col-palette { width: 220px; border-right: 1px solid var(--line); background: var(--panel); }
+    .col-palette { width: 254px; border-right: 1px solid var(--line); background: var(--panel); }
     .col-canvas  { flex: 1; min-width: 0; background: var(--bg); }
     .col-compose { width: 292px; border-left: 1px solid var(--line); background: var(--panel); }
+    /* One height for all three column headers, so the palette's search box, the
+       canvas toolbar and "This email" sit on a single line across the editor. */
+    .col-head, .canvas-bar, .palette-search {
+        min-height: 50px; display: flex; align-items: center; flex-shrink: 0;
+        border-bottom: 1px solid var(--line); background: var(--panel);
+    }
     .col-head {
-        padding: 13px 16px 11px; font-size: 11px; font-weight: 700; text-transform: uppercase;
-        letter-spacing: .6px; color: var(--muted); border-bottom: 1px solid var(--line);
-        display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+        padding: 0 16px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .6px; color: var(--muted); gap: 8px;
     }
     .col-body { overflow-y: auto; flex: 1; padding: 8px; }
-    .group-label {
-        font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
-        color: var(--muted); padding: 14px 8px 6px;
-    }
-    .group-label:first-child { padding-top: 4px; }
-    .block-card {
-        display: flex; align-items: center; justify-content: space-between;
-        border-radius: 8px; padding: 9px 10px; cursor: pointer; font-size: 13.5px;
-        color: var(--ink); transition: background .1s;
-    }
-    .block-card:hover { background: var(--accent-soft); color: var(--accent); }
-    .block-card em { font-style: normal; font-size: 17px; line-height: 1; opacity: 0; }
-    .block-card:hover em { opacity: 1; }
 
-    .canvas-bar {
-        display: flex; align-items: center; gap: 10px; padding: 9px 16px;
-        border-bottom: 1px solid var(--line); background: var(--panel); flex-shrink: 0;
+    /* ------------------------------------------------------- section library */
+    /* Three things make this findable: a search box that also matches the
+       block's description and keywords, seven small groups instead of one run
+       of fourteen, and a one-line blurb per row so two similar sections can be
+       told apart without hovering for a tooltip. */
+    .palette-search { padding: 0 11px; }
+    .palette-search input { width: 100%; max-width: none; font-size: 13px; padding: 7px 10px; }
+
+    .group-head {
+        display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+        border: 0; border-radius: 6px; background: none; cursor: pointer;
+        padding: 13px 7px 6px; font-size: 10.5px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
     }
+    .group-head:first-child { padding-top: 5px; }
+    .group-head:hover { border: 0; color: var(--ink); }
+    .group-head .lbl { flex: 1; }
+    .group-head .n {
+        font-size: 10.5px; font-weight: 600; letter-spacing: 0; opacity: .75;
+        font-variant-numeric: tabular-nums;
+    }
+    .group-head .car { font-size: 7px; line-height: 1; transition: transform .12s; transform: rotate(90deg); }
+    .group-head.shut .car { transform: rotate(0deg); }
+
+    .block-card {
+        display: flex; align-items: flex-start; gap: 9px; width: 100%; text-align: left;
+        border: 1px solid transparent; border-radius: 9px; padding: 7px 8px;
+        background: none; color: var(--ink); font-size: 13.5px; cursor: pointer;
+        transition: background .1s;
+    }
+    .block-card:hover, .block-card:focus-visible {
+        background: var(--accent-soft); border-color: var(--line);
+        color: var(--ink); outline: none;
+    }
+    .block-card .ic { flex-shrink: 0; color: var(--muted); margin-top: 2px; }
+    .block-card .ic svg { width: 16px; height: 16px; display: block; }
+    .block-card:hover .ic, .block-card:focus-visible .ic { color: var(--ink); }
+    .block-card .tx { flex: 1; min-width: 0; }
+    .block-card .nm { display: block; font-weight: 500; line-height: 1.3; }
+    .block-card .ds {
+        display: block; font-size: 11px; line-height: 1.35; color: var(--muted);
+        margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .block-card .add {
+        flex-shrink: 0; font-size: 15px; line-height: 1; color: var(--muted);
+        margin-top: 3px; opacity: 0;
+    }
+    .block-card:hover .add, .block-card:focus-visible .add { opacity: 1; }
+
+    .canvas-bar { gap: 10px; padding: 0 16px; }
     .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
     .seg button { border: 0; border-radius: 0; padding: 6px 13px; font-size: 12.5px; }
-    .seg button.on { background: var(--accent); color: #fff; }
+    .seg button.on { background: var(--accent); color: var(--on-accent); }
     .canvas-wrap { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 22px; }
     iframe#preview { border: 0; background: transparent; width: 700px; height: 100%; min-height: 620px; transition: width .18s; }
     iframe#preview.mobile { width: 400px; }
@@ -314,7 +376,6 @@
         <div class="brand">Email <span>Kit</span></div>
         <input type="search" id="tplSearch" placeholder="Search templates…">
         <div class="spacer"></div>
-        <span class="who" id="whoTpl"></span>
         <button type="button" id="btnProjects">Projects</button>
         <a href="library.html" target="_blank"><button type="button">Shared link</button></a>
         <button type="button" id="btnSignOut">Sign out</button>
@@ -400,7 +461,10 @@
     </header>
     <main>
         <section class="col col-palette">
-            <div class="col-head">Add a section</div>
+            <div class="palette-search">
+                <input type="search" id="paletteSearch" autocomplete="off"
+                       placeholder="Search sections…" aria-label="Search sections">
+            </div>
             <div class="col-body" id="palette"></div>
         </section>
         <section class="col col-canvas">
@@ -551,18 +615,110 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
 
 /* ===================================================================== view */
 
+/* ------------------------------------------------------- section library */
+
+/* 16x16 line icons, monochrome and drawn in currentColor so they inherit the
+ * greyscale palette. Inline rather than a sprite or a font — the kit is meant
+ * to stay a handful of files you can open from any static host. */
+var PALETTE_ICONS = {
+    logo:      '<circle cx="8" cy="8" r="5.4"/><path d="M5.4 8h5.2"/>',
+    keyline:   '<path d="M2.2 4h11.6" stroke-width="2.6"/><path d="M2.2 8.4h11.6M2.2 11.6h7.5" opacity=".45"/>',
+    title:     '<path d="M2.5 4.6h8" stroke-width="2.6"/><path d="M2.5 9.2h11M2.5 12.4h7"/>',
+    greeting:  '<rect x="2.4" y="3" width="11.2" height="7.6" rx="1.8"/><path d="M5.6 10.6v2.9l3-2.9"/>',
+    paragraph: '<path d="M2.5 4h11M2.5 7h11M2.5 10h11M2.5 13h6.5"/>',
+    signature: '<path d="M2.4 11.2c1.6-6.2 3-6 3.4.4.3 4.4 1.9-5.2 3.2-1.2.6 1.9 1.6 1.1 2.8.8"/><path d="M2.4 13.9h11.2" opacity=".4"/>',
+    button:    '<rect x="2.2" y="5" width="11.6" height="6" rx="3"/><path d="M5.6 8h4.8"/>',
+    help:      '<circle cx="8" cy="8" r="5.6"/><path d="M6.4 6.3a1.65 1.65 0 013.25.42c0 1.1-1.65 1.35-1.65 2.45"/><path d="M8 11.4h.01" stroke-width="1.7"/>',
+    status:    '<circle cx="8" cy="8" r="5.6"/><path d="M5.7 8.2l1.7 1.7 3.1-3.7"/>',
+    details:   '<path d="M2.4 4.6h4.4M9.6 4.6h4M2.4 8h4.4M9.6 8h4M2.4 11.4h4.4M9.6 11.4h4"/>',
+    receipt:   '<path d="M4 2.6h8v10.8l-2-1.2-2 1.2-2-1.2-2 1.2z"/><path d="M6.2 5.8h3.6M6.2 8.4h3.6"/>',
+    steps:     '<circle cx="3.7" cy="4" r="1.6"/><path d="M7.4 4h6.2"/><circle cx="3.7" cy="8" r="1.6"/><path d="M7.4 8h6.2"/><circle cx="3.7" cy="12" r="1.6"/><path d="M7.4 12h6.2"/>',
+    documents: '<path d="M4 2.6h4.8l3.2 3.2v7.6H4z"/><path d="M8.8 2.6v3.2H12"/><path d="M6.2 9.6h3.6"/>',
+    image:     '<rect x="2.2" y="3.4" width="11.6" height="9.2" rx="1.8"/><circle cx="5.8" cy="6.8" r="1.1"/><path d="M2.6 11.6l3.4-3.1 2.4 2.2 2-1.8 3.2 3"/>',
+    panel:     '<rect x="2.2" y="3.4" width="11.6" height="9.2" rx="1.8"/><path d="M4.8 7h6.4M4.8 9.8h4"/>',
+    columns:   '<rect x="2.2" y="3.4" width="5" height="9.2" rx="1.4"/><rect x="8.8" y="3.4" width="5" height="9.2" rx="1.4"/>',
+    quote:     '<path d="M3.6 4.2v7.6" stroke-width="2.4"/><path d="M7 5.8h6.4M7 8.6h4.6M7 11.4h5.4"/>',
+    divider:   '<path d="M2.2 4.2h9" opacity=".4"/><path d="M2.2 8h11.6"/><path d="M2.2 11.8h9" opacity=".4"/>',
+    spacer:    '<path d="M2.2 3.4h11.6M2.2 12.6h11.6"/><path d="M8 5.6v4.8M6.3 7.1L8 5.4l1.7 1.7M6.3 8.9L8 10.6l1.7-1.7"/>',
+    footer:    '<path d="M2.4 3.6h11.2M2.4 6.2h7.6" opacity=".4"/><rect x="2.2" y="9" width="11.6" height="4.4" rx="1.4"/>'
+};
+
+var paletteQuery = '';
+var paletteShut = {};     /* group name -> folded away */
+
+function paletteIcon(name) {
+    var d = PALETTE_ICONS[name] || PALETTE_ICONS.paragraph;
+    return '<span class="ic" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" ' +
+        'stroke="currentColor" stroke-width="1.4" stroke-linecap="round" ' +
+        'stroke-linejoin="round">' + d + '</svg></span>';
+}
+
+/* First sentence of the block's own description — enough to tell Panel from
+ * Status without hovering. The full text stays on the tooltip. */
+function blockBlurb(b) {
+    var m = /^([\s\S]*?[.!?])(\s|$)/.exec(b.desc || '');
+    return (m ? m[1] : (b.desc || '')).replace(/[.\s]+$/, '');
+}
+
+/* Name, group, description and the extra keywords, so "cta", "hr", "table" or
+ * "attachment" all land on the right section. */
+function blockMatches(b, q) {
+    if (!q) return true;
+    return (b.name + ' ' + b.group + ' ' + (b.keywords || '') + ' ' + (b.desc || ''))
+        .toLowerCase().indexOf(q) !== -1;
+}
+
 function renderPalette() {
-    var groups = [], byGroup = {};
+    var q = paletteQuery.toLowerCase();
+    var byGroup = {}, order = BLOCK_GROUPS.slice();
+
     BLOCKS.forEach(function (b) {
-        if (!byGroup[b.group]) { byGroup[b.group] = []; groups.push(b.group); }
+        if (order.indexOf(b.group) === -1) order.push(b.group);
+        if (!byGroup[b.group]) byGroup[b.group] = [];
         byGroup[b.group].push(b);
     });
-    document.getElementById('palette').innerHTML = groups.map(function (g) {
-        return '<div class="group-label">' + g + '</div>' + byGroup[g].map(function (b) {
-            return '<div class="block-card" data-add="' + b.id + '" title="' + b.desc + '">' +
-                b.name + '<em>+</em></div>';
+
+    var html = '', hitTotal = 0;
+
+    order.forEach(function (g) {
+        var all = byGroup[g] || [];
+        var hits = all.filter(function (b) { return blockMatches(b, q); });
+        if (!hits.length) return;
+        hitTotal += hits.length;
+
+        /* A search overrides the fold. Hiding a match inside a collapsed group
+         * is the opposite of what someone typing in the box wants. */
+        var shut = !q && !!paletteShut[g];
+
+        html += '<button type="button" class="group-head' + (shut ? ' shut' : '') + '"' +
+            ' data-group="' + esc(g) + '" aria-expanded="' + (!shut) + '">' +
+            '<span class="car" aria-hidden="true">▶</span>' +
+            '<span class="lbl">' + esc(g) + '</span>' +
+            '<span class="n">' + hits.length +
+                (q && hits.length !== all.length ? '/' + all.length : '') + '</span>' +
+        '</button>';
+
+        if (shut) return;
+
+        html += hits.map(function (b) {
+            return '<button type="button" class="block-card" data-add="' + b.id + '"' +
+                ' title="' + esc(b.desc || b.name) + '">' +
+                paletteIcon(b.icon) +
+                '<span class="tx">' +
+                    '<span class="nm">' + esc(b.name) + '</span>' +
+                    '<span class="ds">' + esc(blockBlurb(b)) + '</span>' +
+                '</span>' +
+                '<span class="add" aria-hidden="true">+</span>' +
+            '</button>';
         }).join('');
-    }).join('');
+    });
+
+    if (!hitTotal) {
+        html = '<div class="empty">Nothing matches “' + esc(paletteQuery) + '”.<br>' +
+            'Try <b>button</b>, <b>table</b>, <b>files</b> or <b>footer</b>.</div>';
+    }
+
+    document.getElementById('palette').innerHTML = html;
 }
 
 function renderCompose() {
@@ -715,7 +871,6 @@ document.getElementById('loginForm').addEventListener('submit', function (e) {
         document.getElementById('loginPass').value
     ).then(function () {
         document.getElementById('loginPass').value = '';
-        refreshWho();
         return loadBrands();
     }).then(function () {
         go('#/'); route();
@@ -725,8 +880,6 @@ document.getElementById('loginForm').addEventListener('submit', function (e) {
         btn.disabled = false; btn.textContent = 'Sign in';
     });
 });
-
-function refreshWho() { document.getElementById('whoTpl').textContent = Api.currentEmail() || ''; }
 
 document.getElementById('btnSignOut').addEventListener('click', function () {
     Api.signOut().then(function () { clearDraft(); location.hash = '#/'; route(); });
@@ -794,10 +947,22 @@ function renderTemplates() {
     }).join('');
 }
 
+/* Hidden entirely when the database predates the column, rather than showing a
+ * switch that cannot work. Api.hasLiveColumn() latches false on the first 400. */
+function liveHtml(r) {
+    if (!Api.hasLiveColumn()) return '';
+    var live = !!r.is_live;
+    return '<button type="button" class="livetog' + (live ? ' on' : '') + '"' +
+        ' data-live="' + r.id + '" aria-pressed="' + live + '" title="' +
+        (live ? 'Live — click to move it back to draft' : 'Draft — click to mark it live') + '">' +
+        '<i></i>' + (live ? 'Live' : 'Draft') + '</button>';
+}
+
 function cardHtml(r) {
     return '<div class="card" data-open="' + r.id + '">' +
         '<div class="nm"><b>' + r.name + '</b>' +
             (r.description ? '<small>' + r.description + '</small>' : '') + '</div>' +
+        liveHtml(r) +
         '<span class="when">' + fmtDate(r.updated_at) + '</span>' +
         '<div class="acts">' +
             '<button class="iconbtn" data-copy="' + r.id + '" title="Duplicate">⧉</button>' +
@@ -828,6 +993,28 @@ document.getElementById('filters').addEventListener('click', function (e) {
 });
 
 document.getElementById('tplList').addEventListener('click', function (e) {
+    /* Before the [data-open] check below, and stopping propagation, so hitting
+     * the switch does not also open the template in the editor. */
+    var lv = e.target.closest('[data-live]');
+    if (lv) {
+        e.stopPropagation();
+        var lid = lv.getAttribute('data-live');
+        var lrow = allTemplates.filter(function (r) { return r.id === lid; })[0];
+        if (!lrow) return;
+        /* No confirm: this is a label recording which version engineering
+         * should be shipping, not a deploy, and it is one click to undo. */
+        var next = !lrow.is_live;
+        lv.disabled = true;
+        Api.setLive(lid, next).then(function () {
+            lrow.is_live = next;
+            renderTemplates();
+        }).catch(function (ex) {
+            lv.disabled = false;
+            alert('Could not change status: ' + ex.message);
+        });
+        return;
+    }
+
     var del = e.target.closest('[data-del]');
     if (del) {
         e.stopPropagation();
@@ -1282,8 +1469,29 @@ window.addEventListener('drop', function (e) {
 /* ------------------------------------------------------------------ palette */
 
 document.getElementById('palette').addEventListener('click', function (e) {
+    var head = e.target.closest('[data-group]');
+    if (head) {
+        var g = head.getAttribute('data-group');
+        paletteShut[g] = !paletteShut[g];
+        renderPalette();
+        return;
+    }
     var card = e.target.closest('[data-add]');
     if (card) addBlock(card.getAttribute('data-add'));
+});
+
+document.getElementById('paletteSearch').addEventListener('input', function (e) {
+    paletteQuery = e.target.value.trim();
+    renderPalette();
+});
+
+/* Escape clears rather than just blurring, so the full list is one key away. */
+document.getElementById('paletteSearch').addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !this.value) return;
+    e.preventDefault();
+    this.value = '';
+    paletteQuery = '';
+    renderPalette();
 });
 
 /* -------------------------------------------------------------- composition */
@@ -1483,7 +1691,6 @@ window.addEventListener('beforeunload', function (e) {
 
 /* ====================================================================== boot */
 
-refreshWho();
 if (Api.isSignedIn()) loadBrands().then(route);
 else route();
 </script>

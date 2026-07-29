@@ -139,12 +139,17 @@ Already done for this project, but for the record — or to stand up a second on
    it. That creates the `email_templates` table, the row-level security
    policies, and the public `email-assets` bucket.
 
-   > **Re-run it on an existing project** to pick up two later additions:
+   > **Re-run it on an existing project** to pick up three later additions:
    > document upload (the bucket originally allowed images only, at 5 MB, so a
-   > PDF came back as a mime error) and the `font` column on `project_brands`.
-   > The script is idempotent — `on conflict do update` widens the bucket in
-   > place, `add column if not exists` adds the column, and no stored file or row
-   > is touched.
+   > PDF came back as a mime error), the `font` column on `project_brands`, and
+   > the `is_live` column on `email_templates` that backs the Live / Draft
+   > switch. The script is idempotent — `on conflict do update` widens the bucket
+   > in place, `add column if not exists` adds the columns, and no stored file or
+   > row is touched.
+   >
+   > Until `is_live` exists the switch simply does not appear: the first `400`
+   > from PostgREST latches the column off and the template list is re-fetched
+   > without it, rather than the whole screen failing.
 3. **Authentication → Sign In / Providers → Email → turn off "Allow new users to
    sign up".** The policies grant write access to any signed-in user, so leaving
    sign-ups open would let anyone register and edit your templates.
@@ -165,9 +170,12 @@ every policy, and that file is served to the browser.
 1. **Pick a project** in the toolbar. Colours, logo and typeface swap; the
    layout does not.
 2. **Start from** a preset, or build from nothing.
-3. **Click a section** on the left to add it to the bottom of the email.
-4. **Drag the ⠿ handle** to move a section up or down. A blue line shows where
-   it will land.
+3. **Click a section** on the left to add it to the bottom of the email. The
+   search box above the list matches a section's name, its description and a set
+   of extra keywords, so `cta`, `hr`, `table` and `attachment` all find the right
+   one. Group headings fold away if you never use them.
+4. **Drag the ⠿ handle** to move a section up or down. A line shows where it will
+   land.
 5. **Click a section's name** to open its options. They stay closed otherwise —
    most of the time you do not need them. Options are per-instance, so two
    Paragraph blocks can differ. Upload slots live here: click **Upload**, or
@@ -178,6 +186,18 @@ every policy, and that file is served to the browser.
    **Merge fields** JSON to pass as `dynamic_template_data`.
 
 Your composition is saved to `localStorage`, so a reload does not lose work.
+
+### Live / Draft
+
+Each row in the template list carries a **Live / Draft** switch. Click it to
+flip; there is no confirmation because it is one click back.
+
+It is a label, not a deploy. Nothing is sent, synced or published — it records
+which templates are the ones in production, so the list stays readable once
+there are three near-identical drafts of the same letter. Editing and saving a
+live template leaves it live; the flag only moves when you click the switch. The
+[shared library](library.html) shows it as a read-only badge and counts them in
+the header, which is the useful half for anyone you send the link to.
 
 ---
 

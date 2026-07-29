@@ -104,11 +104,49 @@ var Api = (function () {
 
     /* -------------------------------------------------------------- templates */
 
+    /* `is_live` arrived after the first databases were created, and the schema
+     * has to be re-run by hand in the Supabase SQL editor. Selecting a column
+     * that does not exist is a 400 from PostgREST, which would take the whole
+     * template list down — so the first miss latches this off, the request is
+     * retried without it, and the UI degrades to hiding the toggle. */
+    var liveColumn = true;
+
+    var TPL_COLS = 'id,project,name,description,variables,sendgrid_template_id,updated_at';
+
+    function hasLiveColumn() { return liveColumn; }
+
     function listTemplates() {
+        var wanted = liveColumn;
         return fetch(SUPABASE.url + '/rest/v1/email_templates' +
-            '?select=id,project,name,description,variables,sendgrid_template_id,updated_at' +
+            '?select=' + TPL_COLS + (wanted ? ',is_live' : '') +
             '&order=project.asc,name.asc', { headers: headers() })
-            .then(check);
+            .then(function (r) {
+                if (!r.ok && wanted && r.status === 400) {
+                    liveColumn = false;
+                    return listTemplates();
+                }
+                return check(r);
+            });
+    }
+
+    /* Publish / unpublish. Deliberately a targeted PATCH rather than part of
+     * saveTemplate, so flipping the switch cannot also overwrite the HTML. */
+    function setLive(id, live) {
+        if (!liveColumn) {
+            return Promise.reject(new Error(
+                'This database has no is_live column yet. Re-run supabase/schema.sql ' +
+                'in the Supabase SQL editor to add it.'));
+        }
+        return authed(function () {
+            return fetch(SUPABASE.url + '/rest/v1/email_templates?id=eq.' + encodeURIComponent(id), {
+                method: 'PATCH',
+                headers: headers({ 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }),
+                body: JSON.stringify({ is_live: !!live })
+            });
+        }).then(function (r) {
+            if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Update failed'); });
+            return !!live;
+        });
     }
 
     function getTemplate(id) {
@@ -119,7 +157,11 @@ var Api = (function () {
     }
 
     /* Upserts on the (project, name) unique index, so saving the same name
-     * twice updates in place rather than piling up duplicates. */
+     * twice updates in place rather than piling up duplicates.
+     *
+     * `is_live` is intentionally absent: merge-duplicates only assigns the
+     * columns present in the body, so editing a live template leaves it live,
+     * and only setLive() ever moves that flag. */
     function saveTemplate(t) {
         return authed(function () {
             return fetch(SUPABASE.url + '/rest/v1/email_templates?on_conflict=project,name', {
@@ -327,6 +369,8 @@ var Api = (function () {
         getTemplate: getTemplate,
         saveTemplate: saveTemplate,
         deleteTemplate: deleteTemplate,
+        setLive: setLive,
+        hasLiveColumn: hasLiveColumn,
         listBrands: listBrands,
         saveBrand: saveBrand,
         resetBrand: resetBrand,
