@@ -79,13 +79,14 @@ editable.
 
 **Pictures and files.** Expand a section and hit **Upload**, or drag the file
 straight onto the slot. It goes to Supabase Storage and comes back as a
-permanent public URL, already filled in. Four places take an upload:
+permanent public URL, already filled in. Five places take an upload:
 
 | Where | Takes | Notes |
 | --- | --- | --- |
 | **Image** section | PNG, JPG, GIF, WebP | The hero picture. |
 | **Logo** section | PNG, JPG, GIF, WebP | Overrides the project logo for this one template — a department mark or a campaign lockup. Leave it empty and the project logo is used. |
 | **Documents** section | PDF, Word, Excel, CSV, TXT, ZIP, or an image | One file per row. Upload slots appear and disappear with the row count. |
+| **Signature** section | PNG, JPG, GIF, WebP | A scanned signature, and an optional stamp or seal beside it. Use **transparent PNGs** — a JPEG arrives as a white rectangle sitting on the card. |
 | Logo in **Colours** | PNG, JPG, GIF, WebP | Sets the project logo, for every template on that project. |
 
 Upload a document and the row is fixed: it shows the real filename, the real
@@ -169,13 +170,17 @@ every policy, and that file is served to the browser.
 
 1. **Pick a project** in the toolbar. Colours, logo and typeface swap; the
    layout does not.
-2. **Start from** a preset, or build from nothing.
-3. **Click a section** on the left to add it to the bottom of the email. The
-   search box above the list matches a section's name, its description and a set
-   of extra keywords, so `cta`, `hr`, `table` and `attachment` all find the right
-   one. Group headings fold away if you never use them.
-4. **Drag the ⠿ handle** to move a section up or down. A line shows where it will
-   land.
+2. **The dropdown in the editor header** switches to any other saved template,
+   grouped by project and marking which ones are live. It asks first if you have
+   unsaved changes. A new template starts from the standard decision-letter
+   layout; delete what you do not want.
+3. **Click a section** on the left to add it to the bottom of the email. Groups
+   start folded, so the column opens as a list of headings — click one to open
+   it. The search box matches a section's name, its description and a set of
+   extra keywords, so `cta`, `hr`, `table` and `attachment` all find the right
+   one, and searching looks inside folded groups.
+4. **Drag a section by its header row** to move it up or down. A line shows where
+   it will land.
 5. **Click a section's name** to open its options. They stay closed otherwise —
    most of the time you do not need them. Options are per-instance, so two
    Paragraph blocks can differ. Upload slots live here: click **Upload**, or
@@ -186,6 +191,10 @@ every policy, and that file is served to the browser.
    **Merge fields** JSON to pass as `dynamic_template_data`.
 
 Your composition is saved to `localStorage`, so a reload does not lose work.
+Saves, upload failures and anything else transient appear as a toast at the
+bottom of the screen. Branding is edited from **Projects**, not from inside the
+editor — it applies to every template on the project, which is not a thing to
+change while you have one open.
 
 ### Live / Draft
 

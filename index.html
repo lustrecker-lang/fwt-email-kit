@@ -202,6 +202,8 @@
         display: flex; align-items: center; gap: 10px; padding: 12px 18px;
         background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0;
     }
+    /* Long template names truncate rather than shoving Export off the header. */
+    #tplSwitch { max-width: 240px; }
     .docname {
         font-weight: 600; font-size: 14.5px; padding: 5px 9px; border-radius: 7px;
         cursor: pointer; border: 1px solid transparent; max-width: 340px;
@@ -293,13 +295,14 @@
     }
     .item.drop-before::before { top: -4px; }
     .item.drop-after::after { bottom: -4px; }
-    .item-head { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 6px; cursor: pointer; user-select: none; }
-    .grip {
-        cursor: grab; color: var(--muted); font-size: 15px; line-height: 1;
-        padding: 2px 3px; border-radius: 4px; letter-spacing: -1px; flex-shrink: 0;
+    /* The whole header row is the drag handle now — no grip dots. Options live
+       in .item-opts below it, so their selects and checkboxes never get caught
+       by a drag that starts up here. */
+    .item-head {
+        display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 12px;
+        cursor: grab; user-select: none;
     }
-    .grip:hover { color: var(--accent); background: var(--accent-soft); }
-    .grip:active { cursor: grabbing; }
+    .item-head:active { cursor: grabbing; }
     .item-head .t { flex: 1; font-size: 13.5px; font-weight: 500; }
     .chev { color: var(--muted); font-size: 10px; transition: transform .12s; }
     .item.open .chev { transform: rotate(90deg); }
@@ -347,6 +350,30 @@
     .form label { font-size: 12px; color: var(--muted); font-weight: 600; }
     .form input, .form select { max-width: none; width: 100%; }
     .form .note { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0; }
+
+    /* --------------------------------------------------------------- toasts */
+    /* Bottom-centre, above the dialogs. Success is ink; only failure gets
+       colour, and it lingers long enough to read a Supabase message. */
+    .toasts {
+        position: fixed; z-index: 60; bottom: 22px; left: 50%; transform: translateX(-50%);
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        pointer-events: none;
+    }
+    .toast {
+        pointer-events: auto; cursor: pointer; max-width: 440px;
+        padding: 10px 16px; border-radius: 10px;
+        background: var(--ink); color: var(--bg);
+        font-size: 13px; font-weight: 500; line-height: 1.45;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .24);
+        animation: toastIn .16s ease-out;
+    }
+    .toast.err { background: #b91c1c; color: #fff; }
+    .toast.out { animation: toastOut .2s ease-in forwards; }
+    @keyframes toastIn  { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+    @keyframes toastOut { to { opacity: 0; transform: translateY(6px); } }
+    @media (prefers-reduced-motion: reduce) {
+        .toast, .toast.out { animation: none; }
+    }
 </style>
 </head>
 <body>
@@ -402,7 +429,6 @@
         <button class="back" id="btnBrandBack" title="Back to projects">←</button>
         <div class="brand" id="brandTitle"></div>
         <div class="spacer"></div>
-        <span id="brandStatus" class="who"></span>
         <button type="button" id="btnBrandReset">Reset to defaults</button>
         <button type="button" id="btnRerender">Re-render templates</button>
         <button class="primary" type="button" id="btnBrandSave">Save</button>
@@ -454,8 +480,7 @@
         <div class="docname" id="docName" title="Rename or change project">Untitled</div>
         <span class="dirty" id="dirtyFlag"></span>
         <div class="spacer"></div>
-        <button class="linkbtn" id="btnEditBrand">Edit brand</button>
-        <select id="presetSel" title="Replace with a ready-made starting point"></select>
+        <select id="tplSwitch" title="Switch to another template" aria-label="Switch template"></select>
         <button id="btnExport">Export</button>
         <button class="primary" id="btnSave">Save</button>
     </header>
@@ -490,6 +515,10 @@
         </section>
     </main>
 </section>
+
+<!-- Transient feedback lands here — saves, upload failures, anything that used
+     to overwrite a label in a header and then have to be put back. -->
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
 <!-- One hidden picker for every upload button; `accept` is set per click, from
      the same allow-list the bucket enforces. -->
@@ -598,8 +627,13 @@ function currentComposition() {
     return { items: state.items.map(function (i) { return { blockId: i.blockId, opts: i.opts }; }) };
 }
 
+/* Unknown block ids are dropped rather than carried around invisibly. A
+ * template saved while Brand keyline still existed would otherwise keep the
+ * dead id in its composition forever, rendering nothing and re-saving it. */
 function applyComposition(c) {
-    state.items = ((c && c.items) || []).map(function (i) {
+    state.items = ((c && c.items) || []).filter(function (i) {
+        return !!blockById(i.blockId);
+    }).map(function (i) {
         return { uid: uidSeq++, blockId: i.blockId, opts: i.opts || {}, open: false };
     });
 }
@@ -615,6 +649,36 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
 
 /* ===================================================================== view */
 
+/* ---------------------------------------------------------------- toasts */
+
+/* Transient feedback. Previously these messages were written into a label in
+ * a header, which meant every one of them needed putting back afterwards —
+ * the save handler literally scheduled renderPreview() two seconds later to
+ * restore the section count it had just overwritten. */
+function toast(msg, kind) {
+    if (!msg) return;
+    var box = document.getElementById('toasts');
+
+    /* Three at once is already more than anyone reads; drop the oldest. */
+    while (box.children.length >= 3) box.removeChild(box.firstChild);
+
+    var el = document.createElement('div');
+    el.className = 'toast' + (kind ? ' ' + kind : '');
+    el.textContent = msg;
+
+    var gone = false;
+    function dismiss() {
+        if (gone) return;
+        gone = true;
+        el.classList.add('out');
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
+    }
+    el.addEventListener('click', dismiss);
+
+    box.appendChild(el);
+    setTimeout(dismiss, kind === 'err' ? 6000 : 2400);
+}
+
 /* ------------------------------------------------------- section library */
 
 /* 16x16 line icons, monochrome and drawn in currentColor so they inherit the
@@ -622,7 +686,6 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
  * to stay a handful of files you can open from any static host. */
 var PALETTE_ICONS = {
     logo:      '<circle cx="8" cy="8" r="5.4"/><path d="M5.4 8h5.2"/>',
-    keyline:   '<path d="M2.2 4h11.6" stroke-width="2.6"/><path d="M2.2 8.4h11.6M2.2 11.6h7.5" opacity=".45"/>',
     title:     '<path d="M2.5 4.6h8" stroke-width="2.6"/><path d="M2.5 9.2h11M2.5 12.4h7"/>',
     greeting:  '<rect x="2.4" y="3" width="11.2" height="7.6" rx="1.8"/><path d="M5.6 10.6v2.9l3-2.9"/>',
     paragraph: '<path d="M2.5 4h11M2.5 7h11M2.5 10h11M2.5 13h6.5"/>',
@@ -644,7 +707,12 @@ var PALETTE_ICONS = {
 };
 
 var paletteQuery = '';
-var paletteShut = {};     /* group name -> folded away */
+
+/* group name -> folded away. Everything starts folded, so the column opens as
+ * seven headings you can read at a glance rather than a list you have to
+ * scroll. Typing in the search box overrides the fold entirely. */
+var paletteShut = {};
+BLOCK_GROUPS.forEach(function (g) { paletteShut[g] = true; });
 
 function paletteIcon(name) {
     var d = PALETTE_ICONS[name] || PALETTE_ICONS.paragraph;
@@ -750,19 +818,25 @@ function renderCompose() {
                         (a ? 'Replace' : 'Upload') + '</button>' +
                     (a ? '<button type="button" class="linkbtn" data-clearimg="' + item.uid + '|' + k + '">clear</button>' : '') +
                 '</span>';
-            } else if (spec.type === 'bool') {
-                field = '<input type="checkbox" data-opt="' + item.uid + '|' + k + '"' + (item.opts[k] ? ' checked' : '') + '>';
             } else {
-                field = '<select data-opt="' + item.uid + '|' + k + '">' + spec.choices.map(function (c) {
-                    return '<option value="' + c + '"' + (String(item.opts[k]) === c ? ' selected' : '') + '>' + c + '</option>';
-                }).join('') + '</select>';
+                /* A composition saved before an option existed has no value for
+                 * it, and render() falls back to the spec default. Fall back to
+                 * the same thing here, or the control would show one value while
+                 * the preview used another. */
+                var cur = item.opts[k] === undefined ? spec.default : item.opts[k];
+                if (spec.type === 'bool') {
+                    field = '<input type="checkbox" data-opt="' + item.uid + '|' + k + '"' + (cur ? ' checked' : '') + '>';
+                } else {
+                    field = '<select data-opt="' + item.uid + '|' + k + '">' + spec.choices.map(function (c) {
+                        return '<option value="' + c + '"' + (String(cur) === c ? ' selected' : '') + '>' + c + '</option>';
+                    }).join('') + '</select>';
+                }
             }
             opts += '<div class="opt"><label>' + spec.label + '</label>' + field + '</div>';
         }
         opts += '<button class="dup" data-dup="' + item.uid + '">Duplicate this section</button>';
         return '<div class="item' + (item.open ? ' open' : '') + '" data-uid="' + item.uid + '">' +
-            '<div class="item-head" data-toggle="' + item.uid + '">' +
-                '<span class="grip" data-grip="' + item.uid + '" title="Drag to reorder">⠿</span>' +
+            '<div class="item-head" data-toggle="' + item.uid + '" title="Click for options, drag to reorder">' +
                 '<span class="t">' + b.name + '</span>' +
                 (optCount ? '<span class="chev">▶</span>' : '') +
                 '<button class="x" data-del="' + item.uid + '" title="Remove">✕</button>' +
@@ -1094,7 +1168,6 @@ function openBrand(key) {
     document.getElementById('bName').value = brandDraft.brand_name;
     document.getElementById('bLogo').value = brandDraft.logo_url;
     document.getElementById('bLogoW').value = brandDraft.logo_width;
-    document.getElementById('brandStatus').textContent = '';
     renderFontChoices();
     renderBrandSwatches();
     renderBrandPreview();
@@ -1180,16 +1253,15 @@ document.getElementById('bLogoW').addEventListener('input', function (e) {
 document.getElementById('btnBrandLogoUpload').addEventListener('click', function () { pickAsset('brandlogo'); });
 
 document.getElementById('btnBrandSave').addEventListener('click', function () {
-    var btn = this, st = document.getElementById('brandStatus');
+    var btn = this;
     btn.disabled = true; btn.textContent = 'Saving…';
     Api.saveBrand(brandDraft).then(function () {
         return loadBrands();
     }).then(function () {
-        st.textContent = 'Saved — applies to every template in this project';
-        st.className = 'ok';
+        toast('Saved — applies to every template in this project');
         renderBrandSwatches();
     }).catch(function (ex) {
-        st.textContent = 'Save failed: ' + ex.message; st.className = 'err';
+        toast('Save failed: ' + ex.message, 'err');
     }).then(function () {
         btn.disabled = false; btn.textContent = 'Save';
     });
@@ -1197,21 +1269,20 @@ document.getElementById('btnBrandSave').addEventListener('click', function () {
 
 document.getElementById('btnBrandReset').addEventListener('click', function () {
     if (!confirm('Discard saved branding for this project and go back to the shipped defaults?')) return;
-    var st = document.getElementById('brandStatus');
     Api.resetBrand(brandKey).then(loadBrands).then(function () {
         openBrand(brandKey);
-        st.textContent = 'Reset to defaults'; st.className = 'ok';
-    }).catch(function (ex) { st.textContent = 'Reset failed: ' + ex.message; st.className = 'err'; });
+        toast('Reset to defaults');
+    }).catch(function (ex) { toast('Reset failed: ' + ex.message, 'err'); });
 });
 
 /* Saved HTML is a denormalisation — the library renders live from composition,
  * but the stored copy goes stale when branding changes. This refreshes it. */
 document.getElementById('btnRerender').addEventListener('click', function () {
-    var btn = this, st = document.getElementById('brandStatus');
+    var btn = this;
     btn.disabled = true; btn.textContent = 'Re-rendering…';
     var t = makeTheme(brandKey);
     Api.listByProject(brandKey).then(function (rows) {
-        if (!rows.length) { st.textContent = 'No templates in this project yet.'; st.className = 'who'; return; }
+        if (!rows.length) { toast('No templates in this project yet.'); return; }
         return rows.reduce(function (chain, r) {
             return chain.then(function () {
                 var items = ((r.composition && r.composition.items) || []);
@@ -1219,11 +1290,10 @@ document.getElementById('btnRerender').addEventListener('click', function () {
                 return Api.updateHtml(r.id, html, extractVariables(html));
             });
         }, Promise.resolve()).then(function () {
-            st.textContent = 'Re-rendered ' + rows.length + ' template' + (rows.length === 1 ? '' : 's');
-            st.className = 'ok';
+            toast('Re-rendered ' + rows.length + ' template' + (rows.length === 1 ? '' : 's'));
         });
     }).catch(function (ex) {
-        st.textContent = 'Re-render failed: ' + ex.message; st.className = 'err';
+        toast('Re-render failed: ' + ex.message, 'err');
     }).then(function () {
         btn.disabled = false; btn.textContent = 'Re-render templates';
     });
@@ -1235,16 +1305,74 @@ function bootEditorOnce() {
     if (bootEditorOnce.done) return;
     bootEditorOnce.done = true;
     renderPalette();
-    var ps = document.getElementById('presetSel');
-    ps.appendChild(new Option('Start from…', ''));
-    for (var p in PRESETS) {
-        if (Object.prototype.hasOwnProperty.call(PRESETS, p)) ps.appendChild(new Option(PRESETS[p].label, p));
-    }
     var dp = document.getElementById('dProject');
     for (var k in THEMES) {
         if (Object.prototype.hasOwnProperty.call(THEMES, k)) dp.appendChild(new Option(THEMES[k].label, k));
     }
 }
+
+/* ------------------------------------------------------- template switcher */
+
+/* Deep-linking to #/t/<id> skips the list screen, so the switcher would have
+ * nothing to offer. Fetch once, lazily, and let it stay short if the call
+ * fails rather than blocking the editor from opening. */
+function ensureTemplates() {
+    if (allTemplates.length) return Promise.resolve();
+    return Api.listTemplates().then(function (rows) {
+        allTemplates = rows;
+    }).catch(function () { /* switcher shows only the current template */ });
+}
+
+function sortTemplates() {
+    allTemplates.sort(function (a, b) {
+        if (a.project !== b.project) return a.project < b.project ? -1 : 1;
+        return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+    });
+}
+
+function renderTplSwitch() {
+    var sel = document.getElementById('tplSwitch');
+    var byProject = {}, order = [];
+
+    /* allProjects() first, so the grouping order matches the filter pills on
+     * the list screen rather than whatever order rows came back in. */
+    allProjects().forEach(function (p) { order.push(p.key); byProject[p.key] = []; });
+    allTemplates.forEach(function (r) {
+        if (!byProject[r.project]) { byProject[r.project] = []; order.push(r.project); }
+        byProject[r.project].push(r);
+    });
+
+    var html = '';
+    /* An unsaved template is not in the list yet and needs an entry of its own,
+     * or the select would sit there displaying somebody else's name. */
+    if (!state.doc.id) {
+        html += '<option value="">' + esc(state.doc.name || 'Untitled') + ' · unsaved</option>';
+    }
+    order.forEach(function (k) {
+        var rows = byProject[k] || [];
+        if (!rows.length) return;
+        html += '<optgroup label="' + esc(makeTheme(k).label) + '">' +
+            rows.map(function (r) {
+                return '<option value="' + r.id + '"' +
+                    (r.id === state.doc.id ? ' selected' : '') + '>' +
+                    esc(r.name) + (r.is_live ? ' · live' : '') + '</option>';
+            }).join('') + '</optgroup>';
+    });
+
+    sel.innerHTML = html;
+    sel.value = state.doc.id || '';
+}
+
+document.getElementById('tplSwitch').addEventListener('change', function () {
+    var id = this.value;
+    if (!id || id === state.doc.id) { this.value = state.doc.id || ''; return; }
+    if (state.dirty && !confirm('You have unsaved changes. Switch template anyway?')) {
+        this.value = state.doc.id || '';
+        return;
+    }
+    clearDraft();
+    go('#/t/' + id);
+});
 
 function startNew() {
     bootEditorOnce();
@@ -1259,32 +1387,32 @@ function startNew() {
     }
     state.dirty = false;
     renderCompose(); renderPreview(); renderDocName();
+    ensureTemplates().then(renderTplSwitch);
 }
 
 function openTemplate(id) {
     bootEditorOnce();
-    if (state.doc.id === id && !state.dirty) { renderCompose(); renderPreview(); renderDocName(); return; }
-    document.getElementById('statusLine').textContent = 'Loading…';
+    if (state.doc.id === id && !state.dirty) {
+        renderCompose(); renderPreview(); renderDocName();
+        ensureTemplates().then(renderTplSwitch);
+        return;
+    }
     Api.getTemplate(id).then(function (t) {
-        if (!t) { alert('That template no longer exists.'); go('#/'); return; }
+        if (!t) { toast('That template no longer exists.', 'err'); go('#/'); return; }
         state.doc = { id: t.id, name: t.name, project: t.project, description: t.description || '' };
         applyComposition(t.composition);
         state.dirty = false;
         renderCompose(); renderPreview(); renderDocName();
         clearDraft();
+        return ensureTemplates().then(renderTplSwitch);
     }).catch(function (ex) {
-        document.getElementById('statusLine').textContent = 'Could not open: ' + ex.message;
+        toast('Could not open: ' + ex.message, 'err');
     });
 }
 
 document.getElementById('btnBack').addEventListener('click', function () {
     if (state.dirty && !confirm('You have unsaved changes. Leave anyway?')) return;
     clearDraft(); go('#/');
-});
-
-document.getElementById('btnEditBrand').addEventListener('click', function () {
-    if (state.dirty && !confirm('You have unsaved changes. Leave anyway?')) return;
-    go('#/projects/' + state.doc.project);
 });
 
 document.getElementById('btnSave').addEventListener('click', function () {
@@ -1325,11 +1453,24 @@ function persist() {
         state.doc.id = row.id;
         state.dirty = false;
         clearDraft(); renderDocName();
-        document.getElementById('statusLine').textContent = 'Saved';
-        setTimeout(renderPreview, 2000);
+
+        /* Fold the saved row into the cached list so the switcher picks up a new
+         * template, or a rename, without another round trip. */
+        var known = false;
+        for (var i = 0; i < allTemplates.length; i++) {
+            if (allTemplates[i].id !== row.id) continue;
+            allTemplates[i] = row;
+            known = true;
+            break;
+        }
+        if (!known) allTemplates.push(row);
+        sortTemplates();
+        renderTplSwitch();
+
+        toast('Saved “' + (row.name || 'Untitled') + '”');
         if (location.hash !== '#/t/' + row.id) history.replaceState(null, '', '#/t/' + row.id);
     }).catch(function (ex) {
-        document.getElementById('statusLine').textContent = 'Save failed: ' + ex.message;
+        toast('Save failed: ' + ex.message, 'err');
     }).then(function () {
         btn.disabled = false; btn.textContent = 'Save';
     });
@@ -1356,25 +1497,23 @@ function takeUpload(target, file) {
     var isBrand = target === 'brandlogo';
     var parts = isBrand ? [] : target.split('|');
     var kind = isBrand ? 'image' : (parts[2] || 'image');
-    var st = document.getElementById(isBrand ? 'brandStatus' : 'statusLine');
 
     /* Fail before the network call when the file is obviously wrong, so the
      * message names the problem instead of relaying a mime error. */
     var bad = Api.checkFile(file, kind);
-    if (bad) {
-        st.textContent = bad;
-        if (isBrand) st.className = 'err';
-        return;
-    }
-    st.textContent = 'Uploading ' + file.name + '…';
-    if (isBrand) st.className = 'who';
+    if (bad) { toast(bad, 'err'); return; }
+
+    /* No "uploading…" toast: markBusy already writes that next to the option
+     * being filled, which is where you are looking. The brand logo has no such
+     * slot, so it gets one. */
+    if (isBrand) toast('Uploading ' + file.name + '…');
     markBusy(target, true);
 
     Api.uploadFile(file, kind).then(function (url) {
         if (isBrand) {
             brandDraft.logo_url = url;
             document.getElementById('bLogo').value = url;
-            st.textContent = 'Uploaded — remember to Save';
+            toast('Logo uploaded — remember to Save');
             renderBrandPreview();
             return;
         }
@@ -1388,8 +1527,7 @@ function takeUpload(target, file) {
         renderAll();
     }).catch(function (ex) {
         markBusy(target, false);
-        st.textContent = 'Upload failed: ' + ex.message;
-        if (isBrand) st.className = 'err';
+        toast('Upload failed: ' + ex.message, 'err');
     });
 }
 
@@ -1525,7 +1663,6 @@ document.getElementById('compose').addEventListener('click', function (e) {
         if (cidx >= 0) { state.items[cidx].opts[cp[1]] = ''; renderAll(); }
         return;
     }
-    if (e.target.closest('.grip')) return;
     var head = e.target.closest('[data-toggle]');
     if (head) {
         var ti = indexOfUid(parseInt(head.getAttribute('data-toggle'), 10));
@@ -1563,15 +1700,18 @@ function hasConditionalOpts(b) {
     return false;
 }
 
-/* --- drag to reorder: draggable only while the grip is held, so the selects
- *     and checkboxes inside a section stay usable ------------------------- */
+/* --- drag to reorder: armed only while the mouse is down on a section's
+ *     header row, so the selects and checkboxes in the body below stay
+ *     usable. Clicking the header still toggles the options open — mousedown
+ *     merely makes the element draggable, it does not start a drag. --------- */
 var dragUid = null;
 var composeEl = document.getElementById('compose');
 
 composeEl.addEventListener('mousedown', function (e) {
-    var grip = e.target.closest('[data-grip]');
-    if (!grip) return;
-    var item = grip.closest('.item');
+    if (e.target.closest('.x')) return;      /* the remove button */
+    var head = e.target.closest('.item-head');
+    if (!head) return;
+    var item = head.closest('.item');
     if (item) item.draggable = true;
 });
 document.addEventListener('mouseup', function () {
@@ -1622,15 +1762,6 @@ composeEl.addEventListener('dragend', function () {
 });
 
 /* ------------------------------------------------------------------ canvas */
-
-document.getElementById('presetSel').addEventListener('change', function (e) {
-    if (!e.target.value) return;
-    if (state.items.length && !confirm('Replace the current sections with this preset?')) {
-        e.target.value = ''; return;
-    }
-    loadPreset(e.target.value);
-    e.target.value = '';
-});
 
 document.getElementById('btnClear').addEventListener('click', function () {
     state.items = []; renderAll();

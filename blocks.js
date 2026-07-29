@@ -61,21 +61,6 @@ var BLOCKS = [
 '<tr><td class="px" align="' + o.align + '" style="' + pad(t, 40) + '">' + mark + '</td></tr>';
     }
 },
-{
-    id: 'header-rule',
-    name: 'Brand keyline',
-    group: 'Header',
-    icon: 'keyline',
-    keywords: 'rule line bar top accent stripe',
-    desc: 'A hairline of brand colour across the very top of the card. The lightest possible branding.',
-    opts: {
-        weight: { label: 'Weight', type: 'select', choices: ['2', '3', '4', '6'], default: '3' }
-    },
-    render: function (t, o) {
-        return '<tr><td style="font-size:0;line-height:0;height:' + o.weight + 'px;background-color:' + t.brand + ';">&nbsp;</td></tr>';
-    }
-},
-
 /* ================================================================ CONTENT */
 /* These banners are the shape of the file, not the shape of the palette — the
  * body blocks below are spread across Text, Buttons & links, Status & data and
@@ -467,17 +452,52 @@ var BLOCKS = [
     name: 'Signature',
     group: 'Text',
     icon: 'signature',
-    keywords: 'sign-off regards thanks sender closing name title',
-    desc: 'Sign-off with sender name and title.',
+    keywords: 'sign-off regards thanks sender closing name title stamp seal handwritten scan',
+    desc: 'Sign-off with sender name and title. Takes a scanned signature, and an optional stamp or seal beside it. Upload transparent PNGs so both sit on the card instead of in a white box.',
     opts: {
-        closing: { label: 'Closing', type: 'select', choices: ['Thanks', 'Kind regards', 'Sincerely', 'Best regards'], default: 'Thanks' }
+        closing: { label: 'Closing', type: 'select', choices: ['Thanks', 'Kind regards', 'Sincerely', 'Best regards'], default: 'Thanks' },
+        sig: { label: 'Signature', type: 'image', default: '' },
+        sigWidth: { label: 'Signature width', type: 'select', choices: ['120', '160', '200', '240'], default: '160' },
+        showStamp: { label: 'Stamp or seal', type: 'bool', default: false },
+        stamp: { label: 'Stamp', type: 'image', default: '', showIf: function (o) { return !!o.showStamp; } },
+        stampWidth: { label: 'Stamp width', type: 'select', choices: ['80', '100', '120', '140'], default: '100', showIf: function (o) { return !!o.showStamp; } }
     },
     render: function (t, o) {
+        /* Neither mark is drawn until a file exists, and neither falls back to a
+         * merge field the way the hero image does — a signature and a seal are
+         * fixed assets of the sender, not something that varies per send.
+         *
+         * No background colour is set on either image, so a transparent PNG
+         * shows the card through it. That is the whole reason to prefer one:
+         * a JPEG signature arrives as a white rectangle. */
+        var sigUrl = assetUrl(o.sig, '');
+        var sigW = parseInt(o.sigWidth, 10) || 160;
+        var mark = sigUrl
+            ? '<img src="' + sigUrl + '" width="' + sigW + '" alt="Signature" style="display:block;border:0;outline:none;text-decoration:none;width:' + sigW + 'px;max-width:100%;height:auto;margin:10px 0 4px 0;">'
+            : '';
+
+        var body =
+            '<p style="margin:0;' + font(t, 'body', t.text) + '">' + o.closing + ',</p>' + mark +
+            '<p style="margin:' + (mark ? '0' : '2px') + ' 0 0 0;' + font(t, 'body', t.text, 'font-weight:600;') + '">{{sender_name}}</p>' +
+            '<p style="margin:0;' + font(t, 'small', t.textMuted) + '">{{sender_title}}</p>';
+
+        var stampUrl = o.showStamp ? assetUrl(o.stamp, '') : '';
+        if (!stampUrl) {
+            return '<tr><td class="px" style="' + pad(t, 32) + '">' + body + '</td></tr>';
+        }
+
+        /* Two cells so the seal sits to the right of the sign-off, baselines
+         * aligned at the bottom. class="stack" drops it underneath on a phone,
+         * where a 100px seal beside text leaves the name nowhere to go. */
+        var stW = parseInt(o.stampWidth, 10) || 100;
         return '' +
 '<tr><td class="px" style="' + pad(t, 32) + '">' +
-    '<p style="margin:0;' + font(t, 'body', t.text) + '">' + o.closing + ',</p>' +
-    '<p style="margin:2px 0 0 0;' + font(t, 'body', t.text, 'font-weight:600;') + '">{{sender_name}}</p>' +
-    '<p style="margin:0;' + font(t, 'small', t.textMuted) + '">{{sender_title}}</p>' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' +
+        '<td class="stack" valign="bottom" style="padding:0;">' + body + '</td>' +
+        '<td class="stack" width="' + stW + '" align="right" valign="bottom" style="padding:0 0 0 20px;">' +
+            '<img src="' + stampUrl + '" width="' + stW + '" alt="Official stamp" style="display:block;border:0;outline:none;text-decoration:none;width:' + stW + 'px;max-width:100%;height:auto;">' +
+        '</td>' +
+    '</tr></table>' +
 '</td></tr>';
     }
 },
@@ -669,11 +689,11 @@ function extractVariables(html) {
 var PRESETS = {
     'approved': {
         label: 'Application approved',
-        blocks: ['header-rule', 'header-logo', 'hero-title', 'greeting', 'paragraph', 'status-callout', 'details-list', 'cta-button', 'steps', 'signature', 'footer-transactional']
+        blocks: ['header-logo', 'hero-title', 'greeting', 'paragraph', 'status-callout', 'details-list', 'cta-button', 'steps', 'signature', 'footer-transactional']
     },
     'changes-requested': {
         label: 'Changes requested',
-        blocks: ['header-rule', 'header-logo', 'hero-title', 'greeting', 'paragraph', 'status-callout', 'quote-note', 'cta-button', 'help-prompt', 'signature', 'footer-transactional'],
+        blocks: ['header-logo', 'hero-title', 'greeting', 'paragraph', 'status-callout', 'quote-note', 'cta-button', 'help-prompt', 'signature', 'footer-transactional'],
         tone: 'warning'
     },
     'receipt': {
@@ -682,7 +702,7 @@ var PRESETS = {
     },
     'document-issued': {
         label: 'Document issued',
-        blocks: ['header-rule', 'header-logo', 'hero-title', 'greeting', 'paragraph', 'document-list', 'cta-button', 'divider', 'feature-panel', 'signature', 'footer-transactional']
+        blocks: ['header-logo', 'hero-title', 'greeting', 'paragraph', 'document-list', 'cta-button', 'divider', 'feature-panel', 'signature', 'footer-transactional']
     },
     'verification': {
         label: 'Short system mail',
