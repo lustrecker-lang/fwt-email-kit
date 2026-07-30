@@ -660,6 +660,23 @@ function defaultOpts(block) {
     return o;
 }
 
+/* A stored composition only knows the options that existed when it was saved.
+ * Everything reads options through here so a missing one behaves as its default
+ * in exactly one way.
+ *
+ * Without this the two sides disagreed: the compose panel filled a gap with the
+ * spec default and showed "Brand logo" ticked, while render() saw undefined,
+ * treated it as off, and drew no logo. Same for showIf, which hid the width
+ * control underneath a ticked box. */
+function withDefaults(block, opts) {
+    var o = {};
+    for (var k in block.opts) {
+        if (!Object.prototype.hasOwnProperty.call(block.opts, k)) continue;
+        o[k] = (opts && opts[k] !== undefined) ? opts[k] : block.opts[k].default;
+    }
+    return o;
+}
+
 /* Branding is no longer per-email: the template's project decides it, and the
  * project settings screen is the single place it is configured. */
 function currentTheme() { return makeTheme(state.doc.project); }
@@ -680,7 +697,8 @@ function renderItems(theme, items) {
          * it so far — a full-bleed picture in the first slot has to lose its top
          * padding and pick up the card's rounded top corners. Every other block
          * ignores the extra argument. */
-        var frag = b.render(theme, item.opts, { index: idx, first: idx === 0, last: idx === live.length - 1 });
+        var frag = b.render(theme, withDefaults(b, item.opts),
+            { index: idx, first: idx === 0, last: idx === live.length - 1 });
         if (n > 1) {
             frag = frag.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function (m, k) {
                 return '{{' + k + '_' + n + '}}';
@@ -907,6 +925,9 @@ function renderCompose() {
     el.innerHTML = state.items.map(function (item) {
         var b = blockById(item.blockId);
         if (!b) return '';
+        /* Same merged view render() gets, so the controls cannot describe a
+         * different email from the one in the preview. */
+        var vals = withDefaults(b, item.opts);
         var opts = '';
         for (var k in b.opts) {
             if (!Object.prototype.hasOwnProperty.call(b.opts, k)) continue;
@@ -914,9 +935,9 @@ function renderCompose() {
             /* An option can depend on another — the third file slot is pointless
              * on a two-row Documents block. The value is kept either way, so
              * turning the row back on brings the file back with it. */
-            if (spec.showIf && !spec.showIf(item.opts)) continue;
+            if (spec.showIf && !spec.showIf(vals)) continue;
             if (spec.type === 'image' || spec.type === 'file') {
-                var a = asset(item.opts[k]);
+                var a = asset(vals[k]);
                 var isImg = spec.type === 'image';
                 field = '<span class="imgopt" data-drop="' + item.uid + '|' + k + '|' + spec.type + '"' +
                         ' title="Click Upload, or drop a ' + (isImg ? 'picture' : 'file') + ' here">' +
@@ -928,16 +949,18 @@ function renderCompose() {
                     (a ? '<button type="button" class="linkbtn" data-clearimg="' + item.uid + '|' + k + '">clear</button>' : '') +
                 '</span>';
             } else {
-                /* A composition saved before an option existed has no value for
-                 * it, and render() falls back to the spec default. Fall back to
-                 * the same thing here, or the control would show one value while
-                 * the preview used another. */
-                var cur = item.opts[k] === undefined ? spec.default : item.opts[k];
+                var cur = vals[k];
                 if (spec.type === 'bool') {
                     field = '<input type="checkbox" data-opt="' + item.uid + '|' + k + '"' + (cur ? ' checked' : '') + '>';
                 } else {
-                    field = '<select data-opt="' + item.uid + '|' + k + '">' + spec.choices.map(function (c) {
-                        return '<option value="' + c + '"' + (String(cur) === c ? ' selected' : '') + '>' + c + '</option>';
+                    /* A value saved before the choice list changed — footer logos
+                     * used to run to 130px — is carried as an extra option rather
+                     * than showing the first choice while the email still renders
+                     * the old size. Picking any listed value retires it. */
+                    var choices = spec.choices.slice();
+                    if (choices.indexOf(String(cur)) === -1) choices.unshift(String(cur));
+                    field = '<select data-opt="' + item.uid + '|' + k + '">' + choices.map(function (c) {
+                        return '<option value="' + esc(c) + '"' + (String(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>';
                     }).join('') + '</select>';
                 }
             }
@@ -1070,6 +1093,20 @@ document.getElementById('loginForm').addEventListener('submit', function (e) {
 
 document.getElementById('btnSignOut').addEventListener('click', function () {
     Api.signOut().then(function () { clearDraft(); location.hash = '#/'; route(); });
+});
+
+/* Only fires once the refresh token has died too, so there is genuinely nothing
+ * left to retry. Before this, an expired session surfaced as "Could not load
+ * templates: JWT expired" printed into the list, with no way forward except
+ * guessing that a reload might help.
+ *
+ * The draft is deliberately left in localStorage: being logged out is not a
+ * decision to throw work away, and an unsaved new template is still there after
+ * signing back in. */
+Api.onAuthLost(function () {
+    toast('Your session expired. Sign in again to carry on.', 'err');
+    route();
+    document.getElementById('loginEmail').focus();
 });
 
 function loadBrands() {

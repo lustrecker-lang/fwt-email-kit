@@ -291,7 +291,7 @@ function pad(t, top, bottom) {
  * name set in type when a project has not been given a logo yet, so it is
  * never blank. */
 function footerMark(t, width, align) {
-    var w = parseInt(width, 10) || 90;
+    var w = parseInt(width, 10) || 44;
     if (!t.logoUrl) {
         return '<span style="' + font(t, 'small', t.text, 'font-weight:700;letter-spacing:-0.1px;') + '">' +
             esc(t.brandName) + '</span>';

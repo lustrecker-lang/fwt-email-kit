@@ -73,16 +73,38 @@ var Api = (function () {
         return Promise.resolve();
     }
 
+    /* Losing the session involuntarily is different from signing out: there is
+     * a half-finished screen behind it and nobody asked. Subscribers get told so
+     * the UI can drop to the login form instead of leaving a raw "JWT expired"
+     * on screen. Fires once — the first failure clears the session, and the
+     * guard stops three concurrent requests raising three notifications. */
+    var authLost = [];
+
+    function onAuthLost(fn) { authLost.push(fn); }
+
+    function loseSession() {
+        if (!session) return;
+        session = null;
+        persist();
+        authLost.forEach(function (fn) {
+            try { fn(); } catch (e) { /* a bad subscriber must not break the rest */ }
+        });
+    }
+
     /* Access tokens expire after an hour. Rather than track expiry, retry once
      * on the 401 — simpler, and wrong-clock-proof. */
     function refresh() {
-        if (!session || !session.refresh_token) return Promise.reject(new Error('Not signed in'));
+        if (!session || !session.refresh_token) {
+            loseSession();
+            return Promise.reject(new Error('Not signed in'));
+        }
         return fetch(SUPABASE.url + '/auth/v1/token?grant_type=refresh_token', {
             method: 'POST',
             headers: { 'apikey': SUPABASE.key, 'Content-Type': 'application/json' },
             body: JSON.stringify({ refresh_token: session.refresh_token })
         }).then(function (r) {
-            if (!r.ok) { session = null; persist(); throw new Error('Session expired — sign in again'); }
+            /* The refresh token is gone too, so there is nothing left to try. */
+            if (!r.ok) { loseSession(); throw new Error('Session expired — sign in again'); }
             return r.json();
         }).then(function (d) {
             session = {
@@ -95,6 +117,15 @@ var Api = (function () {
         });
     }
 
+    /* Wraps a request so an expired access token is refreshed and the request
+     * retried once, transparently.
+     *
+     * `doRequest` must build its own headers each call rather than closing over
+     * them, or the retry would send the same dead token again.
+     *
+     * Reads go through this as well as writes. They did not use to, which is why
+     * an hour-old tab could save a template happily and then fail to list them
+     * with "JWT expired": the write path refreshed and the read path did not. */
     function authed(doRequest) {
         return doRequest().then(function (r) {
             if (r.status !== 401 || !session) return r;
@@ -117,16 +148,17 @@ var Api = (function () {
 
     function listTemplates() {
         var wanted = liveColumn;
-        return fetch(SUPABASE.url + '/rest/v1/email_templates' +
-            '?select=' + TPL_COLS + (wanted ? ',is_live' : '') +
-            '&order=project.asc,name.asc', { headers: headers() })
-            .then(function (r) {
-                if (!r.ok && wanted && r.status === 400) {
-                    liveColumn = false;
-                    return listTemplates();
-                }
-                return check(r);
-            });
+        return authed(function () {
+            return fetch(SUPABASE.url + '/rest/v1/email_templates' +
+                '?select=' + TPL_COLS + (wanted ? ',is_live' : '') +
+                '&order=project.asc,name.asc', { headers: headers() });
+        }).then(function (r) {
+            if (!r.ok && wanted && r.status === 400) {
+                liveColumn = false;
+                return listTemplates();
+            }
+            return check(r);
+        });
     }
 
     /* Publish / unpublish. Deliberately a targeted PATCH rather than part of
@@ -150,10 +182,10 @@ var Api = (function () {
     }
 
     function getTemplate(id) {
-        return fetch(SUPABASE.url + '/rest/v1/email_templates?select=*&id=eq.' + encodeURIComponent(id),
-            { headers: headers() })
-            .then(check)
-            .then(function (rows) { return rows[0] || null; });
+        return authed(function () {
+            return fetch(SUPABASE.url + '/rest/v1/email_templates?select=*&id=eq.' + encodeURIComponent(id),
+                { headers: headers() });
+        }).then(check).then(function (rows) { return rows[0] || null; });
     }
 
     /* Upserts on the (project, name) unique index, so saving the same name
@@ -197,8 +229,9 @@ var Api = (function () {
     /* ----------------------------------------------------------------- brands */
 
     function listBrands() {
-        return fetch(SUPABASE.url + '/rest/v1/project_brands?select=*', { headers: headers() })
-            .then(check);
+        return authed(function () {
+            return fetch(SUPABASE.url + '/rest/v1/project_brands?select=*', { headers: headers() });
+        }).then(check);
     }
 
     function saveBrand(b) {
@@ -252,8 +285,10 @@ var Api = (function () {
     }
 
     function listByProject(key) {
-        return fetch(SUPABASE.url + '/rest/v1/email_templates?select=id,composition' +
-            '&project=eq.' + encodeURIComponent(key), { headers: headers() }).then(check);
+        return authed(function () {
+            return fetch(SUPABASE.url + '/rest/v1/email_templates?select=id,composition' +
+                '&project=eq.' + encodeURIComponent(key), { headers: headers() });
+        }).then(check);
     }
 
     /* ---------------------------------------------------------------- storage */
@@ -365,6 +400,7 @@ var Api = (function () {
     return {
         isSignedIn: isSignedIn,
         currentEmail: currentEmail,
+        onAuthLost: onAuthLost,
         signIn: signIn,
         signOut: signOut,
         listTemplates: listTemplates,

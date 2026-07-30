@@ -197,6 +197,9 @@ every policy, and that file is served to the browser.
    **Merge fields** JSON to pass as `dynamic_template_data`.
 
 Your composition is saved to `localStorage`, so a reload does not lose work.
+Access tokens last an hour, but every request refreshes and retries on its own,
+so you should never see an expiry. If the refresh token has gone too, the app
+signs you out and shows the login form rather than printing `JWT expired` at you.
 Saves, upload failures and anything else transient appear as a toast at the
 bottom of the screen. Branding is edited from **Projects**, not from inside the
 editor — it applies to every template on the project, which is not a thing to
@@ -386,10 +389,12 @@ Putting an unsubscribe link on genuinely transactional mail invites people to
 opt out of messages they need. Putting bulk mail out *without* one breaches
 CAN-SPAM and most equivalents.
 
-All three carry the project's logo, on by default and sized down to as little as
-60px. A footer with no mark on it is the shape of a phishing email, which is
-exactly the wrong signal on a verification code. If the project has no logo set,
-the mark falls back to its name in type rather than rendering nothing.
+All three carry the project's logo, on by default, at footer scale — 44px by
+default and as small as 28px. It is there to reassure, not to announce; the logo
+at the top of the card already did that. A footer with no mark on it is the shape
+of a phishing email, which is exactly the wrong signal on a verification code. If
+the project has no logo set, the mark falls back to its name in type rather than
+rendering nothing.
 
 **Social links are set per project**, under **Projects → Social links**, not per
 email. They are a property of the organisation and the same on every send, so

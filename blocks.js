@@ -546,7 +546,9 @@ var BLOCKS = [
     desc: 'For system mail: receipts, decisions, resets. Sender identity and a do-not-reply notice — deliberately NO unsubscribe link.',
     opts: {
         showLogo: { label: 'Brand logo', type: 'bool', default: true },
-        logoWidth: { label: 'Logo width', type: 'select', choices: ['70', '90', '110', '130'], default: '90', showIf: function (o) { return !!o.showLogo; } },
+        /* Footer scale, not header scale. A footer mark is there to reassure, not
+         * to announce — the logo at the top of the card already did that. */
+        logoWidth: { label: 'Logo width', type: 'select', choices: ['32', '44', '56', '70'], default: '44', showIf: function (o) { return !!o.showLogo; } },
         showAddress: { label: 'Postal address', type: 'bool', default: true },
         showHelp: { label: 'Help link', type: 'bool', default: true }
     },
@@ -582,7 +584,7 @@ var BLOCKS = [
     desc: 'For newsletters and campaigns. Unsubscribe, preferences and a postal address — all legally required for bulk mail. Social links come from the project, not from this email.',
     opts: {
         showLogo: { label: 'Brand logo', type: 'bool', default: true },
-        logoWidth: { label: 'Logo width', type: 'select', choices: ['70', '90', '110', '130'], default: '90', showIf: function (o) { return !!o.showLogo; } },
+        logoWidth: { label: 'Logo width', type: 'select', choices: ['32', '44', '56', '70'], default: '44', showIf: function (o) { return !!o.showLogo; } },
         showSocial: { label: 'Social links', type: 'bool', default: true },
         showReason: { label: 'Why you got this', type: 'bool', default: true }
     },
@@ -636,7 +638,7 @@ var BLOCKS = [
     desc: 'One quiet line. For short system mail like a verification code, where a full footer would outweigh the message.',
     opts: {
         showLogo: { label: 'Brand logo', type: 'bool', default: true },
-        logoWidth: { label: 'Logo width', type: 'select', choices: ['60', '70', '90', '110'], default: '70', showIf: function (o) { return !!o.showLogo; } }
+        logoWidth: { label: 'Logo width', type: 'select', choices: ['28', '36', '44', '56'], default: '36', showIf: function (o) { return !!o.showLogo; } }
     },
     render: function (t, o) {
         /* Even here. A verification code with no mark on it is the shape of a
