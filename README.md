@@ -239,12 +239,17 @@ the header, which is the useful half for anyone you send the link to.
 
 ## Colour roles
 
-Every theme defines the same nine roles, so any block works under any brand.
-Open **Colours** to edit them live; **reset** restores the project defaults.
+Every theme defines the same nine roles, so any block works under any brand. All
+nine are on the project settings screen and edit live; **Reset to defaults**
+restores the shipped ones.
 
-Three are shown up front — **CTA / brand**, **Page background** and **Text** —
-because those are the ones anyone actually changes. The remaining six sit behind
-**More colours**.
+Each is a **hex field with the colour shown beside it**, not an
+`<input type="color">`. The operating system's colour wheel is the wrong tool for
+entering a brand value you already have written down. Type or paste it however
+it comes: `#98593e`, `98593e`, `#ABC`, `985` — the hash is optional, three-digit
+shorthand is expanded, case and whitespace are cleaned up on blur. A half-typed
+value is outlined but changes nothing, so `#98` on its way to `#98593e` never
+repaints the email black.
 
 | Role | What it drives |
 | --- | --- |

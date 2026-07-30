@@ -182,14 +182,21 @@
     }
     .specimen .sd { font-size: 21px; font-weight: 700; letter-spacing: -0.3px; }
     .specimen .sb { font-size: 13.5px; line-height: 1.6; margin-top: 5px; color: var(--muted); }
-    .swatches { display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 12px 20px; }
-    .sw { display: flex; align-items: center; gap: 9px; }
-    .sw input[type="color"] {
-        width: 30px; height: 30px; padding: 0; border: 1px solid var(--line);
-        border-radius: 7px; background: none; cursor: pointer; flex-shrink: 0;
+    .swatches { display: grid; grid-template-columns: repeat(2, minmax(170px, 1fr)); gap: 14px 20px; }
+    .sw { display: grid; gap: 5px; }
+    .sw .nm { font-size: 12.5px; font-weight: 500; line-height: 1.25; }
+    .swrow { display: flex; align-items: center; gap: 8px; }
+    /* A plain swatch, not a button. There is nothing to click — the value is
+       typed, and this is here so you can see what you typed. */
+    .chip {
+        width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--line);
+        flex-shrink: 0; display: block;
     }
-    .sw .nm { font-size: 13px; font-weight: 500; line-height: 1.25; }
-    .sw .hx { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+    input.hex {
+        flex: 1; min-width: 0; max-width: none; font-family: var(--mono);
+        font-size: 12.5px; padding: 6px 8px;
+    }
+    input.hex.bad { border-color: #b91c1c; }
     .prevbox {
         width: 380px; flex-shrink: 0; border: 1px solid var(--line);
         border-radius: 12px; overflow: hidden; background: var(--panel);
@@ -1515,12 +1522,32 @@ function brandTheme() {
     return t;
 }
 
+/* Accepts what people actually paste: with or without the hash, three digits or
+ * six, any case. Returns a normalised #rrggbb, or null when it is not a colour
+ * yet — half-typed input is incomplete, not wrong, and must not be treated as
+ * an error while someone is still typing it. */
+function normHex(s) {
+    var v = String(s === undefined || s === null ? '' : s).trim().replace(/^#/, '').toLowerCase();
+    if (/^[0-9a-f]{3}$/.test(v)) v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
+    return /^[0-9a-f]{6}$/.test(v) ? '#' + v : null;
+}
+
+/* Hex typed in by hand, with the colour shown beside it. Deliberately not
+ * <input type="color">: that opens the operating system's colour wheel, which is
+ * the wrong tool for entering a brand value you already know. */
 function renderBrandSwatches() {
     var t = brandTheme();
     document.getElementById('bSwatches').innerHTML = COLOR_ROLES.map(function (r) {
-        return '<div class="sw" title="' + r.hint + '">' +
-            '<input type="color" data-bcolor="' + r.key + '" value="' + t[r.key] + '">' +
-            '<div><div class="nm">' + r.label + '</div><div class="hx">' + t[r.key] + '</div></div></div>';
+        var hex = normHex(t[r.key]) || t[r.key];
+        return '<div class="sw" title="' + esc(r.hint) + '">' +
+            '<div class="nm">' + esc(r.label) + '</div>' +
+            '<div class="swrow">' +
+                '<span class="chip" style="background:' + esc(hex) + '"></span>' +
+                '<input type="text" class="hex" data-bcolor="' + esc(r.key) + '"' +
+                    ' value="' + esc(hex) + '" spellcheck="false" autocomplete="off"' +
+                    ' aria-label="' + esc(r.label) + ', hex value">' +
+            '</div>' +
+        '</div>';
     }).join('');
 }
 
@@ -1549,10 +1576,30 @@ function renderBrandPreview() {
 document.getElementById('bSwatches').addEventListener('input', function (e) {
     var f = e.target.closest('[data-bcolor]');
     if (!f) return;
-    brandDraft.colors[f.getAttribute('data-bcolor')] = f.value;
-    var hx = f.parentNode.querySelector('.hx');
-    if (hx) hx.textContent = f.value;
+    var hex = normHex(f.value);
+    /* Marked, but nothing is stored and the preview is left alone — an
+     * incomplete value like "#98" should not repaint the email black. */
+    f.classList.toggle('bad', hex === null && f.value.trim() !== '');
+    if (hex === null) return;
+
+    brandDraft.colors[f.getAttribute('data-bcolor')] = hex;
+    var chip = f.parentNode.querySelector('.chip');
+    if (chip) chip.style.background = hex;
     renderBrandPreview();
+});
+
+/* Tidied up on blur rather than mid-keystroke: rewriting the field while someone
+ * types would jump the caret to the end. "985" becomes "#998855" here. */
+document.getElementById('bSwatches').addEventListener('change', function (e) {
+    var f = e.target.closest('[data-bcolor]');
+    if (!f) return;
+    var hex = normHex(f.value);
+    if (hex) { f.value = hex; f.classList.remove('bad'); return; }
+    /* Unrecoverable: put back whatever the theme currently resolves to, so the
+     * field can never be left holding something that is not a colour. */
+    var t = brandTheme();
+    f.value = normHex(t[f.getAttribute('data-bcolor')]) || '#000000';
+    f.classList.remove('bad');
 });
 
 document.getElementById('bName').addEventListener('input', function (e) {
