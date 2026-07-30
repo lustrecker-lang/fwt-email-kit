@@ -121,6 +121,25 @@
     table.vars code { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
     table.vars td.nx { color: var(--muted); }
     table.vars td.nx em { font-style: normal; font-size: 11px; }
+    table.vars td.where { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    table.vars td.where b { color: var(--ink); font-weight: 500; }
+    /* Slots the recipient never sees rendered — a link target, an image URL.
+       Called out because there is nothing in the preview to point at. */
+    table.vars .slot {
+        display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 100px;
+        font-size: 10px; line-height: 15px; border: 1px solid var(--line); color: var(--muted);
+    }
+
+    .togbtn {
+        padding: 0; width: 40px; height: 30px;
+        display: inline-flex; align-items: center; justify-content: center;
+    }
+    .togbtn svg {
+        width: 16px; height: 16px; display: block; fill: none; stroke: currentColor;
+        stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .togbtn.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+    .togbtn.on:hover { color: var(--on-accent); }
 </style>
 </head>
 <body>
@@ -155,6 +174,13 @@
                     <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4.6" y="1.8" width="6.8" height="12.4" rx="1.8"/><path d="M7.3 12.3h1.4"/></svg>
                 </button>
             </div>
+            <!-- Turns the preview into a map: every merge field named where it
+                 sits, which is the only way to tell two fields apart when they
+                 happen to hold the same value. -->
+            <button class="togbtn" id="vLabels" title="Name the merge fields in place"
+                    aria-label="Name the merge fields in place" aria-pressed="false">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8.4 1.9h5.7v5.7l-6.6 6.6a1.5 1.5 0 01-2.1 0L1.9 10.7a1.5 1.5 0 010-2.1z"/><circle cx="11.2" cy="4.8" r="1.05"/></svg>
+            </button>
             <div class="spacer"></div>
             <span class="meta" id="tMeta"></span>
             <button class="primary" id="copyBtn">Copy HTML</button>
@@ -177,7 +203,7 @@
  * No sign-in: the row-level security policy allows anonymous SELECT and nothing
  * else, so this page physically cannot change anything. */
 
-var rows = [], current = null, view = 'preview', suppressHash = false;
+var rows = [], current = null, view = 'preview', suppressHash = false, labels = false;
 
 function projectLabel(key) {
     return (typeof THEMES !== 'undefined' && THEMES[key] && THEMES[key].label) || key;
@@ -218,6 +244,7 @@ function setView(v) {
     document.getElementById('viewHtml').style.display = v === 'html' ? 'block' : 'none';
     document.getElementById('viewVars').style.display = v === 'vars' ? 'block' : 'none';
     document.getElementById('deviceSeg').style.display = v === 'preview' ? 'inline-flex' : 'none';
+    document.getElementById('vLabels').style.display = v === 'preview' ? 'inline-flex' : 'none';
     [['vPreview', 'preview'], ['vHtml', 'html'], ['vVars', 'vars']].forEach(function (p) {
         document.getElementById(p[0]).classList.toggle('on', v === p[1]);
     });
@@ -228,6 +255,17 @@ function setView(v) {
  * composition rather than in a column of their own. */
 function examplesOf(t) {
     return (t && t.composition && t.composition.examples) || {};
+}
+
+/* Preview is the email as it is meant to go out: the fixed copy as written, and
+ * every remaining merge field standing in for a realistic value. With labels on
+ * it becomes a map of which parts are dynamic. The HTML tab is where you go for
+ * the literal template. */
+function paintPreview() {
+    if (!current) return;
+    var fn = labels ? fillSampleLabelled : fillSample;
+    document.getElementById('frame').srcdoc =
+        fn(current.html, makeTheme(current.project), examplesOf(current));
 }
 
 function show(id) {
@@ -242,24 +280,29 @@ function show(id) {
         }
 
         var examples = examplesOf(t);
+        var map = (t.composition && t.composition.varMap) || {};
 
-        /* Preview is the email as it is meant to go out: the fixed copy as
-         * written, and every remaining merge field standing in for a realistic
-         * value. The HTML tab is where you go for the literal template. */
-        document.getElementById('frame').srcdoc =
-            fillSample(t.html, makeTheme(t.project), examples);
+        paintPreview();
         document.getElementById('viewHtml').textContent = t.html;
 
         var vars = t.variables || [];
         document.getElementById('viewVars').innerHTML = vars.length
             ? '<p class="meta" style="margin:0 0 14px">Pass these as <code>dynamic_template_data</code>. ' +
-              'The example is what the template\u2019s author says belongs in each one. Anything omitted ' +
-              'renders as literal {{ }} text in the delivered email.</p>' +
-              '<table class="vars"><tr><th>Merge field</th><th>Example value</th></tr>' +
+              '<b>Where</b> is the section it appears in; the example is what the template\u2019s author ' +
+              'says belongs in it. Use the tag button on the preview to see each one named in place. ' +
+              'Anything omitted renders as literal {{ }} text in the delivered email.</p>' +
+              '<table class="vars"><tr><th>Merge field</th><th>Where</th><th>Example value</th></tr>' +
               vars.map(function (v) {
                   var given = examples[v] && String(examples[v]).trim();
                   var fallback = (typeof SAMPLE !== 'undefined' && SAMPLE[v] !== undefined) ? String(SAMPLE[v]) : '';
+                  var at = map[v];
+                  /* Templates saved before the map existed simply have none. */
+                  var where = at
+                      ? '<b>' + esc(at.block) + '</b>' + (at.nth > 1 ? ' #' + at.nth : '') +
+                        (at.slot && at.slot !== 'text' ? '<span class="slot">' + esc(at.slot) + '</span>' : '')
+                      : '—';
                   return '<tr><td><code>{{' + esc(v) + '}}</code></td>' +
+                      '<td class="where">' + where + '</td>' +
                       '<td' + (given ? '' : ' class="nx"') + '>' +
                       esc(given ? examples[v] : (fallback || 'not specified')) +
                       (given ? '' : ' <em>(generic)</em>') + '</td></tr>';
@@ -306,6 +349,13 @@ document.getElementById('list').addEventListener('click', function (e) {
     if (row) show(row.getAttribute('data-id'));
 });
 document.getElementById('reload').addEventListener('click', loadAll);
+
+document.getElementById('vLabels').addEventListener('click', function () {
+    labels = !labels;
+    this.classList.toggle('on', labels);
+    this.setAttribute('aria-pressed', labels ? 'true' : 'false');
+    paintPreview();
+});
 
 document.getElementById('vPreview').addEventListener('click', function () { setView('preview'); });
 document.getElementById('vHtml').addEventListener('click', function () { setView('html'); });

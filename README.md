@@ -470,8 +470,28 @@ template updates the URL, so the address bar is the link.
 That page shows three things. **Preview** is the email as intended — the fixed
 copy as written and every remaining field standing in for its example value.
 **HTML** is the literal template with the handlebars still in it, ready to paste
-into SendGrid. **Merge fields** is a table of every variable beside its example,
-marked where no example was given. Live / Draft says which version is approved.
+into SendGrid. **Merge fields** is a table of every variable, the section it
+appears in, and its example. Live / Draft says which version is approved.
+
+The **tag button** beside the width toggle turns the preview into a map: every
+merge field is highlighted and named where it sits. Without it the table only
+reads one way — name to value — and the dev has to find `Amara` in the email and
+work out that it means `first_name`. That is tedious across forty-odd fields and
+outright impossible where two fields hold the same value, which already happens
+by default: `email_subject` and `email_title` are both "Your application has been
+approved". The composer has the same view as the middle of its three preview
+modes, so whoever writes the copy can check the map before handing it over.
+
+Ten or so fields are link targets and image URLs rather than visible text. A
+marker cannot be put inside `href=""` without breaking the document, so those are
+not highlighted — the table tags them `link`, `image` or `alt text` instead, which
+is also how you know not to go looking for them in the preview.
+
+The section names come from a map built while rendering, saved beside the
+examples. Only the composer knows which section produced which fragment; the
+shared page has the finished HTML and nothing else, so it has to be told. It is
+built on save rather than on every keystroke, and templates saved before it
+existed show a dash in that column rather than breaking.
 
 Nothing to interpret, and no second place to go looking for the wording.
 

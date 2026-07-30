@@ -97,6 +97,34 @@ function sampleIdentity(theme) {
     };
 }
 
+/* Is this placeholder inside a tag, or in text the recipient reads?
+ *
+ * Scanning back to the nearest angle bracket answers it: if the closest one is
+ * an opening bracket we are still inside a tag, so the placeholder is an
+ * attribute value — a link target or an image source. Copy is escaped long
+ * before it reaches here, so no < or > from anyone's sentence can confuse this.
+ *
+ * It matters twice over. Visible text can be escaped and wrapped in a marker;
+ * an attribute can be neither, because a <span> inside href="" would break the
+ * document. */
+function slotAt(html, offset) {
+    var before = html.slice(0, offset);
+    if (before.lastIndexOf('<') <= before.lastIndexOf('>')) return 'text';
+    var attr = /([a-zA-Z-]+)\s*=\s*"[^"]*$/.exec(before);
+    var name = attr ? attr[1].toLowerCase() : '';
+    if (name === 'href') return 'link';
+    if (name === 'src') return 'image';
+    if (name === 'alt') return 'alt text';
+    return 'attribute';
+}
+
+/* Styling for the labelled view. Inline, because it is injected into the email
+ * document itself, and only ever seen in a browser preview. */
+var MARK_STYLE = 'background:#fff6cc;box-shadow:0 0 0 1px #e0c25c;border-radius:2px;padding:0 1px;';
+var MARK_TAG_STYLE = 'display:inline-block;margin-left:3px;font-family:ui-monospace,Menlo,Consolas,monospace;' +
+    'font-size:9px;line-height:14px;vertical-align:2px;background:#382f19;color:#ffe6a3;' +
+    'border-radius:3px;padding:0 4px;white-space:nowrap;font-weight:400;letter-spacing:0;';
+
 /* Fills a rendered document with something readable, in order of authority:
  *
  *   1. `examples` — what whoever built this template said each field should look
@@ -106,9 +134,14 @@ function sampleIdentity(theme) {
  *   3. the generic filler above, for anything nobody has got round to.
  *
  * Falls back to the unsuffixed field too, so a duplicated block previews with
- * readable text instead of a bare {{body_text_2}}. Both extra arguments are
- * optional; with neither you get plain generic filler. */
-function fillSample(html, theme, examples) {
+ * readable text instead of a bare {{body_text_2}}.
+ *
+ * With `label` on, every visible placeholder is wrapped and tagged with its own
+ * name, so the email can be read as a map of which parts are dynamic. That is
+ * the difference between a table saying first_name is "Amara" and being able to
+ * see which "Amara" on the page it means — which matters most exactly where a
+ * table is least help, when two fields share a value. */
+function fillWith(html, theme, examples, label) {
     var identity = sampleIdentity(theme);
     var given = examples || {};
     function lookup(k) {
@@ -118,10 +151,30 @@ function fillSample(html, theme, examples) {
         if (Object.prototype.hasOwnProperty.call(SAMPLE, k)) return SAMPLE[k];
         return null;
     }
-    return html.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function (m, k) {
+    function resolve(k) {
         var hit = lookup(k);
-        if (hit !== null) return hit;
-        hit = lookup(k.replace(/_\d+$/, ''));
-        return hit !== null ? hit : m;
+        return hit !== null ? hit : lookup(k.replace(/_\d+$/, ''));
+    }
+    return html.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function (m, k, offset) {
+        var v = resolve(k);
+        if (v === null) return m;
+        /* An attribute takes the raw value: it is a URL, and escaping the quotes
+         * in one would be worse than leaving it. */
+        if (slotAt(html, offset) !== 'text') return String(v);
+        /* Visible copy is escaped. Examples are typed by a person, so a stray <
+         * would otherwise land as markup in the preview. */
+        var text = esc(String(v));
+        if (!label) return text;
+        return '<span style="' + MARK_STYLE + '">' + text +
+            '<span style="' + MARK_TAG_STYLE + '">' + esc(k) + '</span></span>';
     });
+}
+
+function fillSample(html, theme, examples) {
+    return fillWith(html, theme, examples, false);
+}
+
+/* The same email, with every merge field named where it sits. */
+function fillSampleLabelled(html, theme, examples) {
+    return fillWith(html, theme, examples, true);
 }
