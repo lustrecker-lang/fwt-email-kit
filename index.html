@@ -85,40 +85,39 @@
     }
     .back:hover { background: var(--accent-soft); color: var(--accent); border: 0; }
 
-    /* --------------------------------------------------------- filter pills */
+    /* ------------------------------------------------------- project filter */
     .filters {
         display: flex; align-items: center; gap: 7px; padding: 12px 22px;
         background: var(--panel); border-bottom: 1px solid var(--line);
         flex-shrink: 0; overflow-x: auto;
     }
-    .pill {
-        display: flex; align-items: center; gap: 8px; white-space: nowrap;
-        padding: 6px 13px; border: 1px solid var(--line); border-radius: 100px;
-        background: var(--panel); color: var(--ink); font-size: 13px; cursor: pointer;
-    }
-    .pill:hover { border-color: var(--accent); }
-    .pill.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-    .pill .ct { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-    .pill.on .ct { color: var(--accent); }
+    /* Uses the same .seg control as the editor toolbars. The count has to read on
+       both the plain and the filled state, so it is currentColor at low opacity
+       rather than a fixed grey. */
+    .filters .seg button { white-space: nowrap; }
+    .filters .seg .ct { opacity: .6; margin-left: 6px; font-variant-numeric: tabular-nums; }
 
     .body { flex: 1; overflow-y: auto; padding: 24px 22px 60px; }
-    .inner { max-width: 940px; margin: 0 auto; }
-    .grp {
-        font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
-        color: var(--muted); padding: 20px 4px 10px;
+    .inner { max-width: 1040px; margin: 0 auto; }
+
+    /* ------------------------------------------------------- template table */
+    table.tpl { width: 100%; border-collapse: collapse; }
+    table.tpl th {
+        text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px;
+        color: var(--muted); font-weight: 700; padding: 0 14px 9px 0;
+        border-bottom: 1px solid var(--line); white-space: nowrap;
     }
-    .grp:first-child { padding-top: 0; }
-    .card {
-        display: flex; align-items: center; gap: 14px; padding: 15px 18px;
-        background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
-        margin-bottom: 8px; cursor: pointer;
+    table.tpl td {
+        padding: 11px 14px 11px 0; border-bottom: 1px solid var(--line); vertical-align: middle;
     }
-    .card:hover { border-color: var(--accent); }
-    .card .nm { flex: 1; min-width: 0; }
-    .card .nm b { font-size: 14.5px; font-weight: 600; display: block; }
-    .card .nm small { font-size: 12.5px; color: var(--muted); display: block; margin-top: 2px; }
-    .card .when { font-size: 12px; color: var(--muted); white-space: nowrap; }
-    .card .acts { display: flex; gap: 4px; }
+    table.tpl tbody tr { cursor: pointer; }
+    table.tpl tbody tr:hover td { background: var(--accent-soft); }
+    table.tpl td.nm b { font-size: 14px; font-weight: 600; display: block; }
+    table.tpl td.nm small { font-size: 12.5px; color: var(--muted); display: block; margin-top: 2px; }
+    table.tpl td.pj { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+    table.tpl td.when { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    table.tpl td.st, table.tpl th.st { width: 1%; white-space: nowrap; }
+    table.tpl td.acts { width: 1%; white-space: nowrap; text-align: right; padding-right: 0; }
 
     /* Live / draft switch. Green is a status, not a brand colour — it is the
        one thing on the templates screen allowed to be coloured, because it is
@@ -1256,16 +1255,19 @@ function renderFilters() {
     var counts = { all: allTemplates.length };
     allTemplates.forEach(function (r) { counts[r.project] = (counts[r.project] || 0) + 1; });
 
-    var html = '<button class="pill' + (filterProject === 'all' ? ' on' : '') + '" data-filter="all">' +
-        'All <span class="ct">' + counts.all + '</span></button>';
+    var tabs = [{ key: 'all', label: 'All' }].concat(allProjects().map(function (p) {
+        return { key: p.key, label: p.theme.label };
+    }));
 
-    html += allProjects().map(function (p) {
-        var n = counts[p.key] || 0;
-        return '<button class="pill' + (filterProject === p.key ? ' on' : '') + '" data-filter="' + esc(p.key) + '">' +
-            esc(p.theme.label) + ' <span class="ct">' + n + '</span></button>';
-    }).join('');
-
-    document.getElementById('filters').innerHTML = html;
+    document.getElementById('filters').innerHTML =
+        '<div class="seg" role="group" aria-label="Filter by project">' +
+        tabs.map(function (tab) {
+            var on = filterProject === tab.key;
+            var n = tab.key === 'all' ? counts.all : (counts[tab.key] || 0);
+            return '<button type="button"' + (on ? ' class="on"' : '') +
+                ' data-filter="' + esc(tab.key) + '" aria-pressed="' + on + '">' +
+                esc(tab.label) + '<span class="ct">' + n + '</span></button>';
+        }).join('') + '</div>';
 }
 
 function renderTemplates() {
@@ -1282,18 +1284,19 @@ function renderTemplates() {
         return;
     }
 
-    /* Grouped when showing everything; a flat list once a project is picked. */
-    if (filterProject !== 'all') { el.innerHTML = rows.map(cardHtml).join(''); return; }
+    /* The Project column only earns its width when more than one project is on
+     * screen. Filtered to one, every row would say the same thing. */
+    var showProject = filterProject === 'all';
 
-    var groups = [], byGroup = {};
-    rows.forEach(function (r) {
-        if (!byGroup[r.project]) { byGroup[r.project] = []; groups.push(r.project); }
-        byGroup[r.project].push(r);
-    });
-    el.innerHTML = groups.map(function (g) {
-        return '<div class="grp">' + makeTheme(g).label + ' · ' + byGroup[g].length + '</div>' +
-            byGroup[g].map(cardHtml).join('');
-    }).join('');
+    el.innerHTML = '<table class="tpl"><thead><tr>' +
+            '<th>Template</th>' +
+            (showProject ? '<th>Project</th>' : '') +
+            '<th class="st">Status</th>' +
+            '<th>Updated</th>' +
+            '<th></th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (r) { return rowHtml(r, showProject); }).join('') +
+        '</tbody></table>';
 }
 
 /* Hidden entirely when the database predates the column, rather than showing a
@@ -1307,16 +1310,17 @@ function liveHtml(r) {
         '<i></i>' + (live ? 'Live' : 'Draft') + '</button>';
 }
 
-function cardHtml(r) {
-    return '<div class="card" data-open="' + r.id + '">' +
-        '<div class="nm"><b>' + r.name + '</b>' +
-            (r.description ? '<small>' + r.description + '</small>' : '') + '</div>' +
-        liveHtml(r) +
-        '<span class="when">' + fmtDate(r.updated_at) + '</span>' +
-        '<div class="acts">' +
-            '<button class="iconbtn" data-copy="' + r.id + '" title="Duplicate">⧉</button>' +
+function rowHtml(r, showProject) {
+    return '<tr data-open="' + r.id + '">' +
+        '<td class="nm"><b>' + esc(r.name) + '</b>' +
+            (r.description ? '<small>' + esc(r.description) + '</small>' : '') + '</td>' +
+        (showProject ? '<td class="pj">' + esc(makeTheme(r.project).label) + '</td>' : '') +
+        '<td class="st">' + liveHtml(r) + '</td>' +
+        '<td class="when">' + fmtDate(r.updated_at) + '</td>' +
+        '<td class="acts">' +
+            '<button class="iconbtn" data-copy="' + r.id + '" title="Duplicate into any project">⧉</button>' +
             '<button class="iconbtn del" data-del="' + r.id + '" title="Delete">✕</button>' +
-        '</div></div>';
+        '</td></tr>';
 }
 
 function loadTemplates() {
@@ -1384,15 +1388,7 @@ document.getElementById('tplList').addEventListener('click', function (e) {
     var cp = e.target.closest('[data-copy]');
     if (cp) {
         e.stopPropagation();
-        Api.getTemplate(cp.getAttribute('data-copy')).then(function (t) {
-            if (!t) return;
-            return Api.saveTemplate({
-                project: t.project, name: t.name + ' copy', description: t.description,
-                composition: t.composition, html: t.html, variables: t.variables
-            });
-        }).then(loadTemplates).then(function () {
-            toast('Duplicated');
-        }).catch(function (ex) { toast('Duplicate failed: ' + ex.message, 'err'); });
+        openDuplicate(cp.getAttribute('data-copy'));
         return;
     }
     var open = e.target.closest('[data-open]');
@@ -1900,6 +1896,53 @@ function openDetails() {
     document.getElementById('detailsDlg').showModal();
 }
 
+/* ------------------------------------------------------------- duplicating */
+
+var dupSource = null;
+
+/* Returns its promise so a caller can chain, and so a failure to load the source
+ * is observable rather than swallowed. */
+function openDuplicate(id) {
+    return Api.getTemplate(id).then(function (t) {
+        if (!t) { toast('That template no longer exists.', 'err'); return; }
+        dupSource = t;
+        detailsMode = 'duplicate';
+        document.getElementById('detailsHead').textContent = 'Duplicate template';
+        document.getElementById('detailsGo').textContent = 'Duplicate';
+        document.getElementById('detailsNote').textContent =
+            'Pick any project. Copying into a different one re-renders the email with ' +
+            'that project\u2019s logo, typeface and colours. The copy always starts as a draft.';
+        fillProjectSelect(t.project);
+        document.getElementById('dName').value = t.name + ' copy';
+        document.getElementById('dDesc').value = t.description || '';
+        document.getElementById('detailsErr').textContent = '';
+        document.getElementById('detailsDlg').showModal();
+        document.getElementById('dName').focus();
+    }).catch(function (ex) { toast('Could not open: ' + ex.message, 'err'); });
+}
+
+/* Re-rendered rather than copied byte for byte. The stored `html` was produced
+ * with the source project's branding, so a copy into another project would
+ * otherwise carry the wrong logo and colours until somebody hit Re-render. Doing
+ * it for same-project copies too costs nothing and means there is one path.
+ *
+ * is_live is deliberately absent: this is a new row, the column defaults to
+ * false, and a duplicate arriving live would be a nasty surprise. */
+function duplicateInto(src, project, name, description) {
+    var theme = makeTheme(project);
+    var items = ((src.composition && src.composition.items) || []).filter(function (i) {
+        return !!blockById(i.blockId);
+    });
+    var examples = (src.composition && src.composition.examples) || {};
+    var html = renderItems(theme, items);
+
+    return Api.saveTemplate({
+        project: project, name: name, description: description,
+        composition: { items: items, examples: examples, varMap: mapVariables(theme, items) },
+        html: html, variables: extractVariables(html)
+    });
+}
+
 /* The project is picked before anything is built, because it decides the logo,
  * typeface and colours every section will render with — discovering that after
  * writing the email is the wrong order. */
@@ -1927,10 +1970,33 @@ document.getElementById('detailsForm').addEventListener('submit', function (e) {
     var project = document.getElementById('dProject').value;
     var name = document.getElementById('dName').value.trim();
     var description = document.getElementById('dDesc').value.trim();
-    if (!project) {
-        document.getElementById('detailsErr').textContent = 'Pick a project first.';
+    var err = document.getElementById('detailsErr');
+    if (!project) { err.textContent = 'Pick a project first.'; return; }
+
+    if (detailsMode === 'duplicate') {
+        /* Saving upserts on (project, name), so a clash here would overwrite the
+         * template being copied *onto* instead of adding one. A duplicate must
+         * never destroy anything, so it is refused rather than confirmed. */
+        var clash = allTemplates.some(function (r) {
+            return r.project === project && r.name === name;
+        });
+        if (clash) {
+            err.textContent = 'There is already a template called that in ' +
+                makeTheme(project).label + '. Give the copy a different name.';
+            return;
+        }
+        var btn = document.getElementById('detailsGo');
+        btn.disabled = true;
+        duplicateInto(dupSource, project, name, description).then(function () {
+            document.getElementById('detailsDlg').close();
+            toast('Duplicated into ' + makeTheme(project).label);
+            return loadTemplates();
+        }).catch(function (ex) {
+            err.textContent = ex.message;
+        }).then(function () { btn.disabled = false; });
         return;
     }
+
     document.getElementById('detailsDlg').close();
 
     if (detailsMode === 'new') {

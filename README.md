@@ -21,8 +21,9 @@ Two pages:
 ### The app, in three screens
 
 1. **Login** — the whole editor sits behind it. No account, no access.
-2. **Your templates** — everything you've saved, grouped by project, searchable.
-   Duplicate or delete from the row; **New template** starts a fresh one.
+2. **Your templates** — a table, one row per template, with a segmented control
+   at the top to filter by project. Duplicate or delete from the row;
+   **New template** starts a fresh one.
 3. **Editor** — the composer. Back arrow returns to the list; the template name
    sits in the header and opens rename/project when clicked.
 
@@ -72,6 +73,15 @@ saves. Click the name in the header to rename or move it to another project.
 Names are unique per project, so saving over an existing name replaces it
 rather than piling up duplicates — the templates list warns you before deleting
 anything.
+
+**Duplicate** asks where to put the copy, so the same email can be forked into
+another project. Copying across projects re-renders the HTML with the
+destination's logo, typeface and colours rather than copying it byte for byte,
+which would otherwise carry the source branding until somebody hit **Re-render
+templates**. The copy always arrives as a draft, and a name that already exists
+in the destination is refused rather than saved — because saving upserts on
+(project, name), so a clash would overwrite the template you were copying
+alongside instead of adding one.
 
 Reopening a template gives you the real thing back, not just its HTML: the block
 composition is stored alongside the rendered output, so everything stays
