@@ -105,6 +105,22 @@
     }
     .empty { color: var(--muted); text-align: center; padding: 60px 24px; line-height: 1.7; }
     .meta { font-size: 12px; color: var(--muted); }
+
+    /* The handover table: what engineering must supply, and what the template's
+       author says each one should look like. */
+    table.vars { border-collapse: collapse; width: 100%; max-width: 720px; }
+    table.vars th {
+        text-align: left; font-size: 10.5px; text-transform: uppercase;
+        letter-spacing: .6px; color: var(--muted); font-weight: 700;
+        padding: 0 12px 8px 0; border-bottom: 1px solid var(--line);
+    }
+    table.vars td {
+        padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line);
+        font-size: 13px; vertical-align: top;
+    }
+    table.vars code { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+    table.vars td.nx { color: var(--muted); }
+    table.vars td.nx em { font-style: normal; font-size: 11px; }
 </style>
 </head>
 <body>
@@ -152,12 +168,16 @@
 <script src="config.js"></script>
 <script src="api.js"></script>
 <script src="theme.js"></script>
+<!-- For fillSample: this page renders the intended email, not the raw template,
+     so it needs the same filler the composer uses. blocks.js is deliberately
+     absent — nothing here re-renders a composition, it reads the stored HTML. -->
+<script src="sample.js"></script>
 <script>
 /* Read-only view of everything saved from the composer.
  * No sign-in: the row-level security policy allows anonymous SELECT and nothing
  * else, so this page physically cannot change anything. */
 
-var rows = [], current = null, view = 'preview';
+var rows = [], current = null, view = 'preview', suppressHash = false;
 
 function projectLabel(key) {
     return (typeof THEMES !== 'undefined' && THEMES[key] && THEMES[key].label) || key;
@@ -203,21 +223,52 @@ function setView(v) {
     });
 }
 
+/* The examples whoever built the template filled in, so this page can show the
+ * exact intended email instead of a wall of handlebars. They live inside the
+ * composition rather than in a column of their own. */
+function examplesOf(t) {
+    return (t && t.composition && t.composition.examples) || {};
+}
+
 function show(id) {
     Api.getTemplate(id).then(function (t) {
         if (!t) return;
         current = t;
         document.getElementById('bar').style.display = 'flex';
+        /* So this exact template can be linked to and handed over. */
+        if (location.hash.slice(1) !== t.id) {
+            suppressHash = true;
+            location.hash = t.id;
+        }
 
-        document.getElementById('frame').srcdoc = t.html;
+        var examples = examplesOf(t);
+
+        /* Preview is the email as it is meant to go out: the fixed copy as
+         * written, and every remaining merge field standing in for a realistic
+         * value. The HTML tab is where you go for the literal template. */
+        document.getElementById('frame').srcdoc =
+            fillSample(t.html, makeTheme(t.project), examples);
         document.getElementById('viewHtml').textContent = t.html;
-        document.getElementById('viewVars').innerHTML = (t.variables || []).length
-            ? '<p class="meta" style="margin:0 0 12px">Pass these as <code>dynamic_template_data</code>. ' +
-              'Anything omitted renders as literal {{ }} text in the delivered email.</p>' +
-              t.variables.map(function (v) { return '<span class="chip">' + v + '</span>'; }).join('')
-            : '<div class="empty">No merge fields.</div>';
+
+        var vars = t.variables || [];
+        document.getElementById('viewVars').innerHTML = vars.length
+            ? '<p class="meta" style="margin:0 0 14px">Pass these as <code>dynamic_template_data</code>. ' +
+              'The example is what the template\u2019s author says belongs in each one. Anything omitted ' +
+              'renders as literal {{ }} text in the delivered email.</p>' +
+              '<table class="vars"><tr><th>Merge field</th><th>Example value</th></tr>' +
+              vars.map(function (v) {
+                  var given = examples[v] && String(examples[v]).trim();
+                  var fallback = (typeof SAMPLE !== 'undefined' && SAMPLE[v] !== undefined) ? String(SAMPLE[v]) : '';
+                  return '<tr><td><code>{{' + esc(v) + '}}</code></td>' +
+                      '<td' + (given ? '' : ' class="nx"') + '>' +
+                      esc(given ? examples[v] : (fallback || 'not specified')) +
+                      (given ? '' : ' <em>(generic)</em>') + '</td></tr>';
+              }).join('') + '</table>'
+            : '<div class="empty">No merge fields.<br>Every word in this email is fixed copy.</div>';
+
         document.getElementById('tMeta').textContent =
             (t.sendgrid_template_id ? t.sendgrid_template_id + '  ·  ' : '') +
+            (vars.length ? vars.length + ' field' + (vars.length === 1 ? '' : 's') + '  ·  ' : '') +
             (t.html.length / 1024).toFixed(1) + ' KB';
         renderList();
     }).catch(function (e) {
@@ -231,11 +282,24 @@ function loadAll() {
     Api.listTemplates().then(function (r) {
         rows = r;
         renderList();
-        if (rows.length && !current) show(rows[0].id);
+        /* A link straight to one template wins over "show the first one", which
+         * is the point of the URL: handing someone a specific email. */
+        var wanted = location.hash.slice(1);
+        var linked = wanted && rows.some(function (x) { return x.id === wanted; });
+        if (linked) show(wanted);
+        else if (rows.length && !current) show(rows[0].id);
     }).catch(function (e) {
         document.getElementById('list').innerHTML = '<div class="empty">Could not load:<br>' + e.message + '</div>';
     });
 }
+
+/* Back and forward move between templates. suppressHash stops show() writing the
+ * hash and immediately reacting to its own write. */
+window.addEventListener('hashchange', function () {
+    if (suppressHash) { suppressHash = false; return; }
+    var id = location.hash.slice(1);
+    if (id && (!current || current.id !== id)) show(id);
+});
 
 document.getElementById('list').addEventListener('click', function (e) {
     var row = e.target.closest('[data-id]');

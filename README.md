@@ -431,6 +431,50 @@ await sgMail.send({
 Any placeholder you do not supply renders as literal `{{ }}` text in the
 delivered email, so treat the Variables list as a required checklist.
 
+### Writing the copy, and handing it over
+
+Two different things live in an email, and the split is what makes the handover
+unambiguous:
+
+- **Words that never change.** The title, the body, the button label, "What
+  happens next", the row labels in Details, the do-not-reply notice. Every one of
+  these is now a text box in the section's options, pre-filled with the
+  placeholder it used to emit. Type over it and the words are baked into the
+  template. Leave it and nothing changes.
+- **Words that differ per recipient.** The name, the reference, the amount, the
+  dates. These stay `{{ merge fields }}` because they have to.
+
+Both can live in the same field, which is the point: `Dear {{first_name}}, your
+application of {{applied_on}} was approved.` Typed copy is escaped so a stray `<`
+or `&` cannot break the email, and `{{ }}` survives escaping untouched. A blank
+line starts a new paragraph.
+
+A field still holding its placeholder is shown dimmed and in monospace, so you
+can see at a glance what has been written and what is still waiting.
+
+**Examples** in the editor header lists every merge field the email still
+contains, and lets you type a realistic value for each — `first_name` → Amara,
+`total_amount` → BBD $175.00. The subject line and preheader are always on this
+list, because they are set at send time rather than in a section. The list shrinks
+as you write copy over placeholders, so it ends up being exactly what engineering
+must supply and nothing more.
+
+Examples are saved inside the template's `composition`, which is already `jsonb`,
+so this needed no migration.
+
+### What the engineer receives
+
+Send them a link to one template: `library.html#<template-id>`. Selecting a
+template updates the URL, so the address bar is the link.
+
+That page shows three things. **Preview** is the email as intended — the fixed
+copy as written and every remaining field standing in for its example value.
+**HTML** is the literal template with the handlebars still in it, ready to paste
+into SendGrid. **Merge fields** is a table of every variable beside its example,
+marked where no example was given. Live / Draft says which version is approved.
+
+Nothing to interpret, and no second place to go looking for the wording.
+
 ### Why the preview copy is not lorem ipsum
 
 The preview exists to prove the layout holds, and layout breaks on the *shape* of

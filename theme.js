@@ -286,6 +286,38 @@ function pad(t, top, bottom) {
     return 'padding:' + top + 'px ' + t.pad + 'px ' + (bottom || 0) + 'px ' + t.pad + 'px;';
 }
 
+/* ------------------------------------------------------------------- copy */
+
+/* Words typed into a block, on their way into the document.
+ *
+ * Escaped, so a stray < or & in someone's sentence cannot break the email or
+ * the preview. {{ placeholders }} survive escaping untouched, because braces,
+ * letters and underscores are not characters esc() touches — which is the whole
+ * trick that lets one field hold fixed copy and variables at the same time:
+ *
+ *     Dear {{first_name}}, your application of {{applied_on}} was approved.
+ *
+ * An empty field falls back to the placeholder the block used to hardcode, so a
+ * template saved before copy was editable renders exactly as it did before. */
+function copy(value, fallback) {
+    var s = (value === undefined || value === null || String(value) === '')
+        ? fallback : String(value);
+    return esc(s);
+}
+
+/* The same, for a field that can hold more than one line. A blank line starts a
+ * new paragraph and a single newline is a line break, which is what anyone
+ * typing into a textarea expects. Without this a two-paragraph field would
+ * arrive as one run-on block. */
+function copyParas(value, fallback, style, gap) {
+    var s = (value === undefined || value === null || String(value) === '')
+        ? fallback : String(value);
+    return String(s).split(/\n[ \t]*\n/).map(function (para, i) {
+        return '<p style="margin:' + (i ? (gap || 14) + 'px' : '0') + ' 0 0 0;' + style + '">' +
+            esc(para).replace(/\n/g, '<br>') + '</p>';
+    }).join('');
+}
+
 /* The project mark at footer scale. Every footer offers this, because a footer
  * with no mark at all reads as a leaked system email. Falls back to the brand
  * name set in type when a project has not been given a logo yet, so it is

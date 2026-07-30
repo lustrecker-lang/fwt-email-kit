@@ -33,6 +33,13 @@ var BLOCK_GROUPS = [
     'Footer'
 ];
 
+/* showIf for the Nth row of a block whose row count is itself an option — the
+ * fourth Details label is pointless on a three-row block. Defined once here
+ * rather than inline, so six near-identical closures cannot drift apart. */
+function upTo(countKey, n) {
+    return function (o) { return parseInt(o[countKey], 10) >= n; };
+}
+
 var BLOCKS = [
 
 /* ================================================================= HEADER */
@@ -70,20 +77,23 @@ var BLOCKS = [
     name: 'Title',
     group: 'Text',
     icon: 'title',
-    keywords: 'headline heading h1 subject subtitle',
-    desc: 'The headline. Large, tightly tracked, with room to breathe above it.',
+    keywords: 'headline heading h1 subject subtitle copy',
+    desc: 'The headline. Large, tightly tracked, with room to breathe above it. Type the words, or leave the placeholder to fill them at send time.',
     opts: {
+        title: { label: 'Title', type: 'text', default: '{{email_title}}' },
         size: { label: 'Size', type: 'select', choices: ['display', 'title'], default: 'display' },
         align: { label: 'Alignment', type: 'select', choices: ['left', 'center'], default: 'left' },
-        showSubtitle: { label: 'Subtitle', type: 'bool', default: true }
+        showSubtitle: { label: 'Subtitle', type: 'bool', default: true },
+        subtitle: { label: 'Subtitle text', type: 'text', default: '{{email_subtitle}}', showIf: function (o) { return !!o.showSubtitle; } }
     },
     render: function (t, o) {
         var sub = o.showSubtitle
-            ? '<p style="margin:12px 0 0 0;' + font(t, 'lead', t.textMuted) + '">{{email_subtitle}}</p>'
+            ? '<p style="margin:12px 0 0 0;' + font(t, 'lead', t.textMuted) + '">' +
+              copy(o.subtitle, '{{email_subtitle}}') + '</p>'
             : '';
         return '' +
 '<tr><td class="px" align="' + o.align + '" style="' + pad(t, 32) + '">' +
-    '<h1 style="margin:0;' + font(t, o.size, t.text) + '">{{email_title}}</h1>' + sub +
+    '<h1 style="margin:0;' + font(t, o.size, t.text) + '">' + copy(o.title, '{{email_title}}') + '</h1>' + sub +
 '</td></tr>';
     }
 },
@@ -96,6 +106,7 @@ var BLOCKS = [
     desc: 'A single rounded image. Upload one, or leave it empty to fill from a merge field at send time. Full bleed in the first slot runs edge to edge and takes the card\'s rounded top corners.',
     opts: {
         src: { label: 'Image', type: 'image', default: '' },
+        alt: { label: 'Alt text', type: 'text', default: '{{hero_image_alt}}' },
         bleed: { label: 'Full bleed', type: 'bool', default: false },
         ratio: { label: 'Height', type: 'select', choices: ['short', 'medium', 'tall', 'very tall', 'extra tall'], default: 'medium' }
     },
@@ -121,7 +132,7 @@ var BLOCKS = [
             ? 'border-radius:' + t.radius + 'px ' + t.radius + 'px 0 0;'
             : (o.bleed ? '' : 'border-radius:' + t.radiusSm + 'px;');
 
-        var img = '<img src="' + src + '" width="' + w + '" height="' + h + '" alt="{{hero_image_alt}}" style="display:block;border:0;outline:none;text-decoration:none;width:100%;max-width:' + w + 'px;height:' + h + 'px;object-fit:cover;' + radius + '">';
+        var img = '<img src="' + src + '" width="' + w + '" height="' + h + '" alt="' + copy(o.alt, '{{hero_image_alt}}') + '" style="display:block;border:0;outline:none;text-decoration:none;width:100%;max-width:' + w + 'px;height:' + h + 'px;object-fit:cover;' + radius + '">';
 
         if (o.bleed) {
             return '<tr><td style="padding:' + (atTop ? '0' : '32px 0 0 0') + ';font-size:0;line-height:0;">' + img + '</td></tr>';
@@ -134,15 +145,17 @@ var BLOCKS = [
     name: 'Greeting',
     group: 'Text',
     icon: 'greeting',
-    keywords: 'hello hi dear salutation first name',
-    desc: 'Salutation. Keep the variable name identical across every project.',
+    keywords: 'hello hi dear salutation first name copy',
+    desc: 'Salutation. The whole line is editable, so "Dear Ms {{last_name}}," works as well as the default.',
     opts: {
-        form: { label: 'Form', type: 'select', choices: ['Hi', 'Hello', 'Dear'], default: 'Hi' }
+        line: { label: 'Greeting', type: 'text', default: 'Hi {{first_name}},' }
     },
     render: function (t, o) {
+        /* Was a Hi / Hello / Dear dropdown. Free text covers those three and
+         * every formal variant a department turns out to insist on. */
         return '' +
 '<tr><td class="px" style="' + pad(t, 32) + '">' +
-    '<p style="margin:0;' + font(t, 'body', t.text) + '">' + o.form + ' {{first_name}},</p>' +
+    '<p style="margin:0;' + font(t, 'body', t.text) + '">' + copy(o.line, 'Hi {{first_name}},') + '</p>' +
 '</td></tr>';
     }
 },
@@ -152,15 +165,16 @@ var BLOCKS = [
     group: 'Text',
     icon: 'paragraph',
     keywords: 'body copy text sentence message',
-    desc: 'Body copy at a comfortable reading size. Stack several for longer messages.',
+    desc: 'Body copy at a comfortable reading size. Leave a blank line to start a new paragraph.',
     opts: {
+        text: { label: 'Text', type: 'textarea', default: '{{body_text}}' },
         size: { label: 'Size', type: 'select', choices: ['body', 'lead', 'small'], default: 'body' },
         muted: { label: 'Muted', type: 'bool', default: false }
     },
     render: function (t, o) {
         return '' +
 '<tr><td class="px" style="' + pad(t, 20) + '">' +
-    '<p style="margin:0;' + font(t, o.size, o.muted ? t.textMuted : t.text) + '">{{body_text}}</p>' +
+    copyParas(o.text, '{{body_text}}', font(t, o.size, o.muted ? t.textMuted : t.text)) +
 '</td></tr>';
     }
 },
@@ -169,9 +183,11 @@ var BLOCKS = [
     name: 'Button',
     group: 'Buttons & links',
     icon: 'button',
-    keywords: 'cta call to action link primary',
+    keywords: 'cta call to action link primary copy label',
     desc: 'Table-based so Outlook honours the padding. One per email, ideally.',
     opts: {
+        label: { label: 'Button text', type: 'text', default: '{{cta_label}}' },
+        url: { label: 'Link', type: 'text', default: '{{cta_url}}' },
         align: { label: 'Alignment', type: 'select', choices: ['left', 'center'], default: 'left' },
         variant: { label: 'Variant', type: 'select', choices: ['solid', 'outline'], default: 'solid' },
         full: { label: 'Full width', type: 'bool', default: false },
@@ -187,7 +203,7 @@ var BLOCKS = [
 '<tr><td class="px" align="' + o.align + '" style="' + pad(t, 28) + '">' +
     '<table role="presentation" cellpadding="0" cellspacing="0" border="0"' + (o.full ? ' width="100%"' : '') + '>' +
         '<tr><td align="center" bgcolor="' + bg + '" style="border-radius:' + r + 'px;border:1px solid ' + bd + ';">' +
-            '<a href="{{cta_url}}" style="' + (o.full ? 'display:block;' : 'display:inline-block;') + 'padding:15px 30px;font-family:' + t.font + ';font-size:16px;line-height:20px;font-weight:600;color:' + fg + ';text-decoration:none;border-radius:' + r + 'px;">{{cta_label}}</a>' +
+            '<a href="' + copy(o.url, '{{cta_url}}') + '" style="' + (o.full ? 'display:block;' : 'display:inline-block;') + 'padding:15px 30px;font-family:' + t.font + ';font-size:16px;line-height:20px;font-weight:600;color:' + fg + ';text-decoration:none;border-radius:' + r + 'px;">' + copy(o.label, '{{cta_label}}') + '</a>' +
         '</td></tr>' +
     '</table>' +
 '</td></tr>';
@@ -198,10 +214,18 @@ var BLOCKS = [
     name: 'Details',
     group: 'Status & data',
     icon: 'details',
-    keywords: 'table rows label value summary reference number',
-    desc: 'Label/value rows separated by hairlines. No box — the whitespace does the work.',
+    keywords: 'table rows label value summary reference number copy',
+    desc: 'Label/value rows separated by hairlines. No box — the whitespace does the work. The labels are yours to write; the values stay merge fields, because that is the part that differs per recipient.',
     opts: {
         rows: { label: 'Rows', type: 'select', choices: ['2', '3', '4', '5', '6'], default: '4' },
+        /* Labels only. "Reference number" is the same on every send and belongs
+         * in the template; the number beside it never is and cannot be. */
+        label1: { label: 'Label 1', type: 'text', default: '{{detail_1_label}}', showIf: upTo('rows', 1) },
+        label2: { label: 'Label 2', type: 'text', default: '{{detail_2_label}}', showIf: upTo('rows', 2) },
+        label3: { label: 'Label 3', type: 'text', default: '{{detail_3_label}}', showIf: upTo('rows', 3) },
+        label4: { label: 'Label 4', type: 'text', default: '{{detail_4_label}}', showIf: upTo('rows', 4) },
+        label5: { label: 'Label 5', type: 'text', default: '{{detail_5_label}}', showIf: upTo('rows', 5) },
+        label6: { label: 'Label 6', type: 'text', default: '{{detail_6_label}}', showIf: upTo('rows', 6) },
         layout: { label: 'Layout', type: 'select', choices: ['inline', 'stacked'], default: 'inline' },
         panel: { label: 'On a panel', type: 'bool', default: false }
     },
@@ -210,16 +234,17 @@ var BLOCKS = [
         var rows = '';
         for (var i = 1; i <= n; i++) {
             var rule = i < n ? 'border-bottom:1px solid ' + t.hairline + ';' : '';
+            var lbl = copy(o['label' + i], '{{detail_' + i + '_label}}');
             if (o.layout === 'stacked') {
                 rows += '' +
 '<tr><td style="padding:14px 0;' + rule + '">' +
-    '<div style="' + font(t, 'small', t.textMuted) + '">{{detail_' + i + '_label}}</div>' +
+    '<div style="' + font(t, 'small', t.textMuted) + '">' + lbl + '</div>' +
     '<div style="' + font(t, 'body', t.text, 'font-weight:600;padding-top:2px;') + '">{{detail_' + i + '_value}}</div>' +
 '</td></tr>';
             } else {
                 rows += '' +
 '<tr>' +
-    '<td width="46%" valign="top" style="padding:14px 0;' + rule + font(t, 'small', t.textMuted) + '">{{detail_' + i + '_label}}</td>' +
+    '<td width="46%" valign="top" style="padding:14px 0;' + rule + font(t, 'small', t.textMuted) + '">' + lbl + '</td>' +
     '<td align="right" valign="top" style="padding:14px 0;' + rule + font(t, 'small', t.text, 'font-weight:600;') + '">{{detail_' + i + '_value}}</td>' +
 '</tr>';
             }
@@ -241,7 +266,9 @@ var BLOCKS = [
     desc: 'Line items with a bold total. For payment confirmations and fee receipts.',
     opts: {
         items: { label: 'Line items', type: 'select', choices: ['1', '2', '3', '4'], default: '2' },
-        showTotal: { label: 'Total row', type: 'bool', default: true }
+        showTotal: { label: 'Total row', type: 'bool', default: true },
+        /* Line items are per-send data. The word "Total" is not. */
+        totalLabel: { label: 'Total label', type: 'text', default: '{{total_label}}', showIf: function (o) { return !!o.showTotal; } }
     },
     render: function (t, o) {
         var n = parseInt(o.items, 10);
@@ -257,7 +284,7 @@ var BLOCKS = [
         }
         var total = o.showTotal
             ? '<tr>' +
-                '<td style="padding:16px 0 0 0;border-top:1px solid ' + t.hairline + ';' + font(t, 'body', t.text, 'font-weight:700;') + '">{{total_label}}</td>' +
+                '<td style="padding:16px 0 0 0;border-top:1px solid ' + t.hairline + ';' + font(t, 'body', t.text, 'font-weight:700;') + '">' + copy(o.totalLabel, '{{total_label}}') + '</td>' +
                 '<td align="right" style="padding:16px 0 0 0;border-top:1px solid ' + t.hairline + ';' + font(t, 'body', t.text, 'font-weight:700;') + '">{{total_amount}}</td>' +
               '</tr>'
             : '';
@@ -276,7 +303,13 @@ var BLOCKS = [
     desc: 'Numbered list in soft tinted tiles. For "what happens next".',
     opts: {
         count: { label: 'Steps', type: 'select', choices: ['2', '3', '4', '5'], default: '3' },
-        showHeading: { label: 'Heading', type: 'bool', default: true }
+        showHeading: { label: 'Heading', type: 'bool', default: true },
+        heading: { label: 'Heading text', type: 'text', default: '{{steps_heading}}', showIf: function (o) { return !!o.showHeading; } },
+        step1: { label: 'Step 1', type: 'text', default: '{{step_1_text}}', showIf: upTo('count', 1) },
+        step2: { label: 'Step 2', type: 'text', default: '{{step_2_text}}', showIf: upTo('count', 2) },
+        step3: { label: 'Step 3', type: 'text', default: '{{step_3_text}}', showIf: upTo('count', 3) },
+        step4: { label: 'Step 4', type: 'text', default: '{{step_4_text}}', showIf: upTo('count', 4) },
+        step5: { label: 'Step 5', type: 'text', default: '{{step_5_text}}', showIf: upTo('count', 5) }
     },
     render: function (t, o) {
         var n = parseInt(o.count, 10);
@@ -293,11 +326,13 @@ var BLOCKS = [
             '<td align="center" width="' + box + '" height="' + box + '" bgcolor="' + t.brandSoft + '" style="width:' + box + 'px;height:' + box + 'px;border-radius:' + radius + 'px;font-family:' + t.font + ';font-size:17px;font-weight:700;line-height:' + box + 'px;color:' + t.brand + ';">' + i + '</td>' +
         '</tr></table>' +
     '</td>' +
-    '<td valign="top" style="padding:5px 0 20px 0;' + font(t, 'small', t.text) + '">{{step_' + i + '_text}}</td>' +
+    '<td valign="top" style="padding:5px 0 20px 0;' + font(t, 'small', t.text) + '">' +
+        copy(o['step' + i], '{{step_' + i + '_text}}') + '</td>' +
 '</tr>';
         }
         var heading = o.showHeading
-            ? '<p style="margin:0 0 18px 0;' + font(t, 'heading', t.text) + '">{{steps_heading}}</p>'
+            ? '<p style="margin:0 0 18px 0;' + font(t, 'heading', t.text) + '">' +
+              copy(o.heading, '{{steps_heading}}') + '</p>'
             : '';
         return '' +
 '<tr><td class="px" style="' + pad(t, 32) + '">' + heading +
@@ -314,6 +349,7 @@ var BLOCKS = [
     desc: 'Downloadable documents as hairline rows with a trailing link. Upload a file per row, or leave it empty to fill from a merge field at send time.',
     opts: {
         count: { label: 'Documents', type: 'select', choices: ['1', '2', '3'], default: '2' },
+        buttonLabel: { label: 'Button text', type: 'text', default: 'Download' },
         pill: { label: 'Pill buttons', type: 'bool', default: false },
         file1: { label: 'File 1', type: 'file', default: '' },
         file2: { label: 'File 2', type: 'file', default: '', showIf: function (o) { return parseInt(o.count, 10) >= 2; } },
@@ -342,7 +378,7 @@ var BLOCKS = [
          * loses to the CTA further up the page. */
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr>' +
             '<td align="center" bgcolor="' + t.brand + '" style="border-radius:' + btnRadius + 'px;">' +
-                '<a href="' + url + '" style="display:inline-block;padding:10px 20px;font-family:' + t.font + ';font-size:14px;line-height:18px;font-weight:600;color:' + t.brandText + ';text-decoration:none;white-space:nowrap;border-radius:' + btnRadius + 'px;">Download</a>' +
+                '<a href="' + url + '" style="display:inline-block;padding:10px 20px;font-family:' + t.font + ';font-size:14px;line-height:18px;font-weight:600;color:' + t.brandText + ';text-decoration:none;white-space:nowrap;border-radius:' + btnRadius + 'px;">' + copy(o.buttonLabel, 'Download') + '</a>' +
             '</td>' +
         '</tr></table>' +
     '</td>' +
@@ -362,10 +398,14 @@ var BLOCKS = [
     keywords: 'card box surface secondary tint promo thumbnail icon image',
     desc: 'A soft surface panel for a secondary message that should not compete with the CTA. Takes a small thumbnail above the title.',
     opts: {
+        title: { label: 'Title', type: 'text', default: '{{panel_title}}' },
+        text: { label: 'Text', type: 'textarea', default: '{{panel_text}}' },
         tinted: { label: 'Brand tint', type: 'bool', default: false },
         img: { label: 'Thumbnail', type: 'image', default: '' },
         imgSize: { label: 'Thumbnail size', type: 'select', choices: ['40', '56', '72', '88'], default: '56' },
-        showLink: { label: 'Link', type: 'bool', default: true }
+        showLink: { label: 'Link', type: 'bool', default: true },
+        linkLabel: { label: 'Link text', type: 'text', default: '{{panel_link_label}}', showIf: function (o) { return !!o.showLink; } },
+        linkUrl: { label: 'Link URL', type: 'text', default: '{{panel_url}}', showIf: function (o) { return !!o.showLink; } }
     },
     render: function (t, o) {
         var bg = o.tinted ? t.brandSoft : t.surface;
@@ -377,14 +417,16 @@ var BLOCKS = [
             ? '<img src="' + thumbUrl + '" width="' + thumbSize + '" height="' + thumbSize + '" alt="" style="display:block;border:0;outline:none;text-decoration:none;width:' + thumbSize + 'px;height:' + thumbSize + 'px;object-fit:cover;border-radius:' + Math.round(thumbSize / 5) + 'px;margin:0 0 14px 0;">'
             : '';
         var link = o.showLink
-            ? '<div style="padding-top:10px;"><a href="{{panel_url}}" style="' + font(t, 'small', t.brand, 'font-weight:600;text-decoration:none;') + '">{{panel_link_label}} &rarr;</a></div>'
+            ? '<div style="padding-top:10px;"><a href="' + copy(o.linkUrl, '{{panel_url}}') + '" style="' + font(t, 'small', t.brand, 'font-weight:600;text-decoration:none;') + '">' + copy(o.linkLabel, '{{panel_link_label}}') + ' &rarr;</a></div>'
             : '';
         return '' +
 '<tr><td class="px" style="' + pad(t, 28) + '">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:' + bg + ';border-radius:' + t.radiusSm + 'px;">' +
         '<tr><td style="padding:22px 24px;">' + thumb +
-            '<p style="margin:0;' + font(t, 'heading', t.text) + '">{{panel_title}}</p>' +
-            '<p style="margin:6px 0 0 0;' + font(t, 'small', t.textMuted) + '">{{panel_text}}</p>' + link +
+            '<p style="margin:0;' + font(t, 'heading', t.text) + '">' + copy(o.title, '{{panel_title}}') + '</p>' +
+            '<div style="padding-top:6px;">' +
+                copyParas(o.text, '{{panel_text}}', font(t, 'small', t.textMuted), 10) +
+            '</div>' + link +
         '</td></tr>' +
     '</table>' +
 '</td></tr>';
@@ -398,10 +440,18 @@ var BLOCKS = [
     keywords: 'side by side split grid pair pictogram icon image',
     desc: 'Side-by-side pair that stacks on mobile. Each side takes a small pictogram above its title.',
     opts: {
+        title1: { label: 'Left title', type: 'text', default: '{{col_1_title}}' },
+        text1: { label: 'Left text', type: 'textarea', default: '{{col_1_text}}' },
+        title2: { label: 'Right title', type: 'text', default: '{{col_2_title}}' },
+        text2: { label: 'Right text', type: 'textarea', default: '{{col_2_text}}' },
         icon1: { label: 'Icon, left', type: 'image', default: '' },
         icon2: { label: 'Icon, right', type: 'image', default: '' },
         iconSize: { label: 'Icon size', type: 'select', choices: ['28', '36', '44', '56'], default: '36' },
-        showLinks: { label: 'Links', type: 'bool', default: false }
+        showLinks: { label: 'Links', type: 'bool', default: false },
+        linkLabel1: { label: 'Left link text', type: 'text', default: '{{col_1_link_label}}', showIf: function (o) { return !!o.showLinks; } },
+        linkUrl1: { label: 'Left link URL', type: 'text', default: '{{col_1_url}}', showIf: function (o) { return !!o.showLinks; } },
+        linkLabel2: { label: 'Right link text', type: 'text', default: '{{col_2_link_label}}', showIf: function (o) { return !!o.showLinks; } },
+        linkUrl2: { label: 'Right link URL', type: 'text', default: '{{col_2_url}}', showIf: function (o) { return !!o.showLinks; } }
     },
     render: function (t, o) {
         /* Deliberately not square-cropped and not rounded: these are pictograms,
@@ -416,13 +466,15 @@ var BLOCKS = [
         }
         function col(i) {
             var link = o.showLinks
-                ? '<div style="padding-top:8px;"><a href="{{col_' + i + '_url}}" style="' + font(t, 'small', t.brand, 'font-weight:600;text-decoration:none;') + '">{{col_' + i + '_link_label}}</a></div>'
+                ? '<div style="padding-top:8px;"><a href="' + copy(o['linkUrl' + i], '{{col_' + i + '_url}}') + '" style="' + font(t, 'small', t.brand, 'font-weight:600;text-decoration:none;') + '">' + copy(o['linkLabel' + i], '{{col_' + i + '_link_label}}') + '</a></div>'
                 : '';
             return '' +
 '<td class="stack" width="50%" valign="top" style="padding:0 ' + (i === 1 ? '14px' : '0') + ' 0 ' + (i === 2 ? '14px' : '0') + ';">' +
     pictogram(i) +
-    '<p style="margin:0;' + font(t, 'heading', t.text) + '">{{col_' + i + '_title}}</p>' +
-    '<p style="margin:6px 0 0 0;' + font(t, 'small', t.textMuted) + '">{{col_' + i + '_text}}</p>' + link +
+    '<p style="margin:0;' + font(t, 'heading', t.text) + '">' + copy(o['title' + i], '{{col_' + i + '_title}}') + '</p>' +
+    '<div style="padding-top:6px;">' +
+        copyParas(o['text' + i], '{{col_' + i + '_text}}', font(t, 'small', t.textMuted), 10) +
+    '</div>' + link +
 '</td>';
         }
         return '' +
@@ -438,11 +490,17 @@ var BLOCKS = [
     icon: 'help',
     keywords: 'support contact question need a hand link',
     desc: 'A quiet "need a hand?" line above the footer. Reduces reply-to-sender traffic.',
-    opts: {},
-    render: function (t) {
+    opts: {
+        line: { label: 'Text', type: 'text', default: 'Need help?' },
+        label: { label: 'Link text', type: 'text', default: '{{help_label}}' },
+        url: { label: 'Link URL', type: 'text', default: '{{help_url}}' }
+    },
+    render: function (t, o) {
         return '' +
 '<tr><td class="px" style="' + pad(t, 28) + '">' +
-    '<p style="margin:0;' + font(t, 'small', t.textMuted) + '">Need help? <a href="{{help_url}}" style="color:' + t.brand + ';font-weight:600;text-decoration:none;">{{help_label}}</a></p>' +
+    '<p style="margin:0;' + font(t, 'small', t.textMuted) + '">' + copy(o.line, 'Need help?') +
+        ' <a href="' + copy(o.url, '{{help_url}}') + '" style="color:' + t.brand + ';font-weight:600;text-decoration:none;">' +
+        copy(o.label, '{{help_label}}') + '</a></p>' +
 '</td></tr>';
     }
 },
@@ -454,7 +512,9 @@ var BLOCKS = [
     keywords: 'sign-off regards thanks sender closing name title stamp seal handwritten scan',
     desc: 'Sign-off with sender name and title. Takes a scanned signature, and can show the project\'s official stamp beside it. Upload transparent PNGs so both sit on the card instead of in a white box.',
     opts: {
-        closing: { label: 'Closing', type: 'select', choices: ['Thanks', 'Kind regards', 'Sincerely', 'Best regards'], default: 'Thanks' },
+        closing: { label: 'Closing', type: 'text', default: 'Thanks' },
+        name: { label: 'Sender name', type: 'text', default: '{{sender_name}}' },
+        title: { label: 'Sender title', type: 'text', default: '{{sender_title}}' },
         sig: { label: 'Signature', type: 'image', default: '' },
         sigWidth: { label: 'Signature width', type: 'select', choices: ['120', '160', '200', '240'], default: '160' },
         showStamp: { label: 'Project stamp', type: 'bool', default: false },
@@ -477,9 +537,9 @@ var BLOCKS = [
             : '';
 
         var body =
-            '<p style="margin:0;' + font(t, 'body', t.text) + '">' + o.closing + ',</p>' + mark +
-            '<p style="margin:' + (mark ? '0' : '2px') + ' 0 0 0;' + font(t, 'body', t.text, 'font-weight:600;') + '">{{sender_name}}</p>' +
-            '<p style="margin:0;' + font(t, 'small', t.textMuted) + '">{{sender_title}}</p>';
+            '<p style="margin:0;' + font(t, 'body', t.text) + '">' + copy(o.closing, 'Thanks') + ',</p>' + mark +
+            '<p style="margin:' + (mark ? '0' : '2px') + ' 0 0 0;' + font(t, 'body', t.text, 'font-weight:600;') + '">' + copy(o.name, '{{sender_name}}') + '</p>' +
+            '<p style="margin:0;' + font(t, 'small', t.textMuted) + '">' + copy(o.title, '{{sender_title}}') + '</p>';
 
         var stampUrl = o.showStamp ? (t.stampUrl || '') : '';
         if (!stampUrl) {
@@ -550,6 +610,10 @@ var BLOCKS = [
          * to announce — the logo at the top of the card already did that. */
         logoWidth: { label: 'Logo width', type: 'select', choices: ['32', '44', '56', '70'], default: '44', showIf: function (o) { return !!o.showLogo; } },
         showAddress: { label: 'Postal address', type: 'bool', default: true },
+        notice: {
+            label: 'Notice', type: 'textarea',
+            default: 'This is an automated message about your account. Replies to this address are not monitored.'
+        },
         showHelp: { label: 'Help link', type: 'bool', default: true }
     },
     render: function (t, o) {
@@ -570,7 +634,9 @@ var BLOCKS = [
     logo +
     '<p style="margin:' + (logo ? '14px' : '24px') + ' 0 0 0;' + font(t, 'small', t.text, 'font-weight:600;') + '">{{org_name}}</p>' +
     addr +
-    '<p style="margin:12px 0 0 0;' + font(t, 'micro', t.textMuted) + '">This is an automated message about your account. Replies to this address are not monitored.</p>' +
+    '<div style="padding:12px 0 0 0;">' +
+        copyParas(o.notice, 'This is an automated message about your account. Replies to this address are not monitored.', font(t, 'micro', t.textMuted), 8) +
+    '</div>' +
     help +
 '</td></tr>';
     }
@@ -586,7 +652,8 @@ var BLOCKS = [
         showLogo: { label: 'Brand logo', type: 'bool', default: true },
         logoWidth: { label: 'Logo width', type: 'select', choices: ['32', '44', '56', '70'], default: '44', showIf: function (o) { return !!o.showLogo; } },
         showSocial: { label: 'Social links', type: 'bool', default: true },
-        showReason: { label: 'Why you got this', type: 'bool', default: true }
+        showReason: { label: 'Why you got this', type: 'bool', default: true },
+        reason: { label: 'Why-you-got-this text', type: 'textarea', default: '{{legal_note}}', showIf: function (o) { return !!o.showReason; } }
     },
     render: function (t, o) {
         /* Real URLs from the project's brand record, not merge fields. A network
@@ -610,7 +677,9 @@ var BLOCKS = [
             ? '<div style="padding:0 0 18px 0;">' + footerMark(t, o.logoWidth, 'center') + '</div>'
             : '';
         var reason = o.showReason
-            ? '<p style="margin:12px 0 0 0;' + font(t, 'micro', t.textMuted) + '">{{legal_note}}</p>'
+            ? '<div style="padding:12px 0 0 0;">' +
+              copyParas(o.reason, '{{legal_note}}', font(t, 'micro', t.textMuted), 8) +
+              '</div>'
             : '';
         return '' +
 '<tr><td class="px" align="center" style="' + pad(t, 40, 40) + '">' +

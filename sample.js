@@ -97,12 +97,23 @@ function sampleIdentity(theme) {
     };
 }
 
-/* Sample copy falls back to the unsuffixed field, so a duplicated block still
- * previews with readable text instead of a bare {{body_text_2}}. `theme` is
- * optional — without it the neutral fallbacks in SAMPLE are used. */
-function fillSample(html, theme) {
+/* Fills a rendered document with something readable, in order of authority:
+ *
+ *   1. `examples` — what whoever built this template said each field should look
+ *      like. Specific to one email, and the reason the shared link can show the
+ *      exact intended message rather than a guess.
+ *   2. the project's identity, so the footer names the right organisation.
+ *   3. the generic filler above, for anything nobody has got round to.
+ *
+ * Falls back to the unsuffixed field too, so a duplicated block previews with
+ * readable text instead of a bare {{body_text_2}}. Both extra arguments are
+ * optional; with neither you get plain generic filler. */
+function fillSample(html, theme, examples) {
     var identity = sampleIdentity(theme);
+    var given = examples || {};
     function lookup(k) {
+        if (Object.prototype.hasOwnProperty.call(given, k) &&
+            String(given[k]).trim() !== '') return given[k];
         if (Object.prototype.hasOwnProperty.call(identity, k)) return identity[k];
         if (Object.prototype.hasOwnProperty.call(SAMPLE, k)) return SAMPLE[k];
         return null;

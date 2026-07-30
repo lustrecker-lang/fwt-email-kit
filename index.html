@@ -318,6 +318,18 @@
     .item.open .item-opts { display: block; }
     .opt { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; }
     .opt label { font-size: 13px; color: var(--muted); }
+    /* Copy needs the whole width, so its label sits above rather than beside. */
+    .opt.stackopt { display: block; padding: 6px 0; }
+    .opt.stackopt label { display: block; font-size: 11.5px; font-weight: 600; margin-bottom: 4px; }
+    .copyin {
+        width: 100%; max-width: none; font: inherit; font-size: 12.5px;
+        line-height: 1.5; padding: 6px 8px; border: 1px solid var(--line);
+        border-radius: 7px; background: var(--panel); color: var(--ink);
+        display: block; resize: vertical;
+    }
+    .copyin:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    /* Still holding its placeholder — nothing has been written yet. */
+    .copyin.ph { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
     .opt select { font-size: 12.5px; padding: 4px 7px; max-width: 118px; }
     .opt input[type="checkbox"] { width: 16px; height: 16px; }
     .noopts { font-size: 12.5px; color: var(--muted); padding: 4px 0 2px; }
@@ -353,6 +365,19 @@
     /* The export modal wants to be wide, because it holds a document. Every
        other dialog is a short form and looked lost at 92vw. */
     dialog.narrow { width: 400px; max-width: 92vw; }
+    dialog.midw { width: 580px; max-width: 94vw; }
+    .exlist {
+        max-height: 58vh; overflow-y: auto; padding: 0 16px 16px;
+        display: grid; gap: 8px;
+    }
+    .exrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center; }
+    .exrow code {
+        font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .exrow input { max-width: none; width: 100%; font-size: 12.5px; padding: 6px 8px; }
+    .exrow input.set { color: var(--ink); }
+    .exdone { color: var(--live); }
     .form { display: grid; gap: 12px; padding: 16px; }
     .form .row { display: grid; gap: 5px; }
     .form label { font-size: 12px; color: var(--muted); font-weight: 600; }
@@ -506,6 +531,7 @@
         <div class="docname" id="docName" title="Rename or change project">Untitled</div>
         <div class="spacer"></div>
         <select id="tplSwitch" title="Switch to another template" aria-label="Switch template"></select>
+        <button id="btnExamples" title="Fill in a realistic example for each merge field">Examples</button>
         <button id="btnExport">Export</button>
         <button class="primary" id="btnSave">Save</button>
     </header>
@@ -612,6 +638,18 @@
     </form>
 </dialog>
 
+<!-- The other half of the handover. Whatever is still a {{ merge field }} after
+     the copy has been written gets a realistic example here, so the engineer
+     sees the exact email rather than a list of variable names. Saved with the
+     template, inside the composition, and shown on the shared link. -->
+<dialog id="examplesDlg" class="midw">
+    <div class="modal-head"><strong>Example values</strong><div class="spacer"></div>
+        <button class="primary" type="button" id="examplesClose">Done</button>
+    </div>
+    <p class="hint" id="examplesNote"></p>
+    <div class="exlist" id="examplesList"></div>
+</dialog>
+
 <dialog id="modal">
     <div class="modal-head">
         <div class="seg">
@@ -637,6 +675,9 @@ var DRAFT_KEY = 'email-kit-draft';
 var state = {
     items: [], fill: true,
     doc: { id: null, name: '', project: 'nursing', description: '' },
+    /* variable name -> the realistic value marketing wants the engineer to see.
+     * Lives in the composition, so it needs no column of its own. */
+    examples: {},
     dirty: false
 };
 var uidSeq = 1;
@@ -711,8 +752,14 @@ function renderItems(theme, items) {
 
 function buildDocument() { return renderItems(currentTheme(), state.items); }
 
+/* Examples ride along inside the composition rather than in a column of their
+ * own. `composition` is already jsonb, so this needs no migration — which
+ * matters, because there are already three waiting to be run. */
 function currentComposition() {
-    return { items: state.items.map(function (i) { return { blockId: i.blockId, opts: i.opts }; }) };
+    return {
+        items: state.items.map(function (i) { return { blockId: i.blockId, opts: i.opts }; }),
+        examples: state.examples
+    };
 }
 
 /* Unknown block ids are dropped rather than carried around invisibly. A
@@ -724,6 +771,7 @@ function applyComposition(c) {
     }).map(function (i) {
         return { uid: uidSeq++, blockId: i.blockId, opts: i.opts || {}, open: false };
     });
+    state.examples = (c && c.examples) || {};
 }
 
 function saveDraft() {
@@ -948,6 +996,17 @@ function renderCompose() {
                         (a ? 'Replace' : 'Upload') + '</button>' +
                     (a ? '<button type="button" class="linkbtn" data-clearimg="' + item.uid + '|' + k + '">clear</button>' : '') +
                 '</span>';
+            } else if (spec.type === 'text' || spec.type === 'textarea') {
+                /* A field still holding its {{ placeholder }} is dimmed, so at a
+                 * glance you can tell what has been written from what is still
+                 * waiting to be filled in at send time. */
+                var val = vals[k] === undefined ? '' : String(vals[k]);
+                var untouched = /^\{\{[a-zA-Z0-9_\s]+\}\}$/.test(val.trim());
+                var attrs = ' class="copyin' + (untouched ? ' ph' : '') + '"' +
+                    ' data-copy="' + item.uid + '|' + k + '" spellcheck="true"';
+                field = spec.type === 'textarea'
+                    ? '<textarea' + attrs + ' rows="3">' + esc(val) + '</textarea>'
+                    : '<input type="text"' + attrs + ' value="' + esc(val) + '">';
             } else {
                 var cur = vals[k];
                 if (spec.type === 'bool') {
@@ -964,7 +1023,11 @@ function renderCompose() {
                     }).join('') + '</select>';
                 }
             }
-            opts += '<div class="opt"><label>' + spec.label + '</label>' + field + '</div>';
+            /* Copy fields get the full width under their label; everything else
+               stays on one line beside it. */
+            var wide = (spec.type === 'text' || spec.type === 'textarea');
+            opts += '<div class="opt' + (wide ? ' stackopt' : '') + '">' +
+                '<label>' + esc(spec.label) + '</label>' + field + '</div>';
         }
         /* Blocks like Help prompt have nothing to configure. Saying so beats
          * opening an empty panel and leaving you wondering what failed. */
@@ -982,7 +1045,8 @@ function renderPreview() {
     var doc = buildDocument();
     /* The theme goes in so {{org_name}} previews as this template's project
      * rather than a hardcoded agency. */
-    document.getElementById('preview').srcdoc = state.fill ? fillSample(doc, currentTheme()) : doc;
+    document.getElementById('preview').srcdoc = state.fill
+        ? fillSample(doc, currentTheme(), state.examples) : doc;
     var kb = (new Blob([doc]).size / 1024).toFixed(1);
     document.getElementById('statusLine').textContent =
         state.items.length + ' section' + (state.items.length === 1 ? '' : 's') + '  ·  ' + kb + ' KB' +
@@ -1652,6 +1716,7 @@ function startNew() {
         };
         pendingNew = null;
         state.items = [];
+        state.examples = {};
         loadPreset('approved');
     } else {
         var draft = readDraft();
@@ -1661,6 +1726,7 @@ function startNew() {
         } else {
             state.doc = { id: null, name: '', project: filterProject !== 'all' ? filterProject : 'nursing', description: '' };
             state.items = [];
+            state.examples = {};
             loadPreset('approved');
         }
     }
@@ -2001,6 +2067,20 @@ document.getElementById('compose').addEventListener('click', function (e) {
     }
 });
 
+/* Copy is typed, so it repaints on every keystroke and must never rebuild the
+ * list — doing so would drop focus mid-word. The dimmed-placeholder class is
+ * toggled here by hand rather than by re-rendering, for the same reason. */
+document.getElementById('compose').addEventListener('input', function (e) {
+    var f = e.target.closest('[data-copy]');
+    if (!f) return;
+    var p = f.getAttribute('data-copy').split('|');
+    var idx = indexOfUid(parseInt(p[0], 10));
+    if (idx < 0) return;
+    state.items[idx].opts[p[1]] = f.value;
+    f.classList.toggle('ph', /^\{\{[a-zA-Z0-9_\s]+\}\}$/.test(f.value.trim()));
+    renderPreview(); touch();
+});
+
 /* Option changes only repaint the preview — rebuilding the list here would
  * yank focus out of the control the user is still using. */
 document.getElementById('compose').addEventListener('change', function (e) {
@@ -2118,19 +2198,88 @@ function refreshModal() {
         document.getElementById('modalHint').textContent =
             'Paste into SendGrid → Dynamic Templates → Code Editor.';
     } else {
-        var vars = extractVariables(doc), obj = {};
+        /* Seeded with the examples rather than generic filler, so what the
+         * engineer copies out is already the intended shape of each value. */
+        var vars = extractVariables(doc), obj = {}, given = 0;
         vars.forEach(function (v) {
-            obj[v] = Object.prototype.hasOwnProperty.call(SAMPLE, v) ? SAMPLE[v] : '';
+            if (state.examples[v] && String(state.examples[v]).trim()) {
+                obj[v] = state.examples[v];
+                given++;
+            } else {
+                obj[v] = Object.prototype.hasOwnProperty.call(SAMPLE, v) ? SAMPLE[v] : '';
+            }
         });
         document.getElementById('modalBody').value = JSON.stringify(obj, null, 2);
-        document.getElementById('modalHint').textContent =
-            vars.length + ' merge fields. Pass these as dynamic_template_data — anything you leave out ' +
-            'renders as literal {{ }} text in the delivered email.';
+        document.getElementById('modalHint').textContent = vars.length
+            ? vars.length + ' merge fields, ' + given + ' with an example set here. Pass these as ' +
+              'dynamic_template_data — anything you leave out renders as literal {{ }} text in the ' +
+              'delivered email.'
+            : 'No merge fields. Every word in this email is fixed copy, so there is nothing to pass.';
     }
 }
 segPair('tabHtml', 'tabVars',
     function () { exportTab = 'html'; refreshModal(); },
     function () { exportTab = 'vars'; refreshModal(); });
+
+/* ---------------------------------------------------------------- examples */
+
+/* One row per merge field the document still contains, in the order they appear
+ * in the email. Writing copy over a placeholder removes it from this list on its
+ * own, so the list shrinks as the template gets more finished — it is the
+ * engineer's to-do list, and it should be as short as possible. */
+function renderExamples() {
+    var vars = extractVariables(buildDocument());
+    var filled = 0;
+
+    var rows = vars.map(function (v) {
+        var set = !!(state.examples[v] && String(state.examples[v]).trim());
+        if (set) filled++;
+        return '<div class="exrow">' +
+            '<code title="{{' + esc(v) + '}}">{{' + esc(v) + '}}</code>' +
+            '<input type="text" data-ex="' + esc(v) + '"' +
+                (set ? ' class="set"' : '') +
+                ' value="' + esc(set ? state.examples[v] : '') + '"' +
+                ' placeholder="' + esc(SAMPLE[v] !== undefined ? String(SAMPLE[v]).slice(0, 40) : 'example value') + '">' +
+        '</div>';
+    }).join('');
+
+    document.getElementById('examplesList').innerHTML = vars.length
+        ? rows
+        : '<div class="empty">No merge fields left — every word in this email is fixed copy.</div>';
+
+    var note = document.getElementById('examplesNote');
+    if (!vars.length) {
+        note.textContent = 'Nothing for engineering to supply. The email is complete as it stands.';
+        note.className = 'hint exdone';
+        return;
+    }
+    note.textContent = filled + ' of ' + vars.length + ' filled in. ' +
+        'These are what the engineer sees on the shared link, so they know exactly ' +
+        'what belongs in each field. Anything left blank falls back to generic filler.';
+    note.className = 'hint' + (filled === vars.length ? ' exdone' : '');
+}
+
+document.getElementById('btnExamples').addEventListener('click', function () {
+    renderExamples();
+    document.getElementById('examplesDlg').showModal();
+});
+document.getElementById('examplesClose').addEventListener('click', function () {
+    document.getElementById('examplesDlg').close();
+});
+
+document.getElementById('examplesList').addEventListener('input', function (e) {
+    var f = e.target.closest('[data-ex]');
+    if (!f) return;
+    var v = f.getAttribute('data-ex');
+    if (f.value.trim()) state.examples[v] = f.value;
+    else delete state.examples[v];
+    f.classList.toggle('set', !!f.value.trim());
+    /* The preview behind the dialog updates live, so you can see the value land
+     * in the email as you type it. */
+    renderPreview(); touch();
+});
+
+/* ------------------------------------------------------------------ export */
 
 document.getElementById('btnExport').addEventListener('click', function () {
     refreshModal(); document.getElementById('modal').showModal();
