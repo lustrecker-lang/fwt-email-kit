@@ -324,18 +324,6 @@
     .item.open .item-opts { display: block; }
     .opt { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; }
     .opt label { font-size: 13px; color: var(--muted); }
-    /* Copy needs the whole width, so its label sits above rather than beside. */
-    .opt.stackopt { display: block; padding: 6px 0; }
-    .opt.stackopt label { display: block; font-size: 11.5px; font-weight: 600; margin-bottom: 4px; }
-    .copyin {
-        width: 100%; max-width: none; font: inherit; font-size: 12.5px;
-        line-height: 1.5; padding: 6px 8px; border: 1px solid var(--line);
-        border-radius: 7px; background: var(--panel); color: var(--ink);
-        display: block; resize: vertical;
-    }
-    .copyin:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-    /* Still holding its placeholder — nothing has been written yet. */
-    .copyin.ph { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
     .opt select { font-size: 12.5px; padding: 4px 7px; max-width: 118px; }
     .opt input[type="checkbox"] { width: 16px; height: 16px; }
     .noopts { font-size: 12.5px; color: var(--muted); padding: 4px 0 2px; }
@@ -371,19 +359,40 @@
     /* The export modal wants to be wide, because it holds a document. Every
        other dialog is a short form and looked lost at 92vw. */
     dialog.narrow { width: 400px; max-width: 92vw; }
-    dialog.midw { width: 580px; max-width: 94vw; }
-    .exlist {
-        max-height: 58vh; overflow-y: auto; padding: 0 16px 16px;
-        display: grid; gap: 8px;
+    dialog.wide { width: 740px; max-width: 96vw; }
+
+    /* ------------------------------------------------------------ copy deck */
+    /* Every word in the email, in one place, in the order it is read. The section
+       options panel deliberately has no text fields — two places to type the same
+       sentence is how you end up with two different sentences. */
+    .deck { max-height: 62vh; overflow-y: auto; padding: 0 16px 16px; }
+    .decksec { margin-bottom: 18px; }
+    .deckhd {
+        font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
+        color: var(--muted); padding: 0 0 8px; border-bottom: 1px solid var(--line);
+        margin-bottom: 10px;
     }
-    .exrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center; }
-    .exrow code {
-        font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    .deckrow { display: grid; gap: 4px; margin-bottom: 12px; }
+    .deckl { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; font-weight: 600; }
+    .deckl .var {
+        font-family: var(--mono); font-size: 10.5px; font-weight: 400; color: var(--muted);
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .exrow input { max-width: none; width: 100%; font-size: 12.5px; padding: 6px 8px; }
-    .exrow input.set { color: var(--ink); }
-    .exdone { color: var(--live); }
+    .deckl .spacer { flex: 1; }
+    .deckfix {
+        display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+        font-weight: 400; color: var(--muted); white-space: nowrap; cursor: pointer;
+    }
+    .deckfix input { width: 13px; height: 13px; }
+    .deckin {
+        width: 100%; max-width: none; font: inherit; font-size: 12.5px; line-height: 1.5;
+        padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px;
+        background: var(--panel); color: var(--ink); display: block; resize: vertical;
+    }
+    .deckin:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    /* Ships as written, so it reads as final rather than as a note to somebody. */
+    .deckin.fixed { border-color: var(--accent); }
+    .deckdone { color: var(--live); }
     .form { display: grid; gap: 12px; padding: 16px; }
     .form .row { display: grid; gap: 5px; }
     .form label { font-size: 12px; color: var(--muted); font-weight: 600; }
@@ -537,7 +546,6 @@
         <div class="docname" id="docName" title="Rename or change project">Untitled</div>
         <div class="spacer"></div>
         <select id="tplSwitch" title="Switch to another template" aria-label="Switch template"></select>
-        <button id="btnExamples" title="Fill in a realistic example for each merge field">Examples</button>
         <button id="btnExport">Export</button>
         <button class="primary" id="btnSave">Save</button>
     </header>
@@ -579,7 +587,9 @@
             <div class="canvas-wrap"><iframe id="preview" title="Email preview"></iframe></div>
         </section>
         <section class="col col-compose">
+            <!-- Copy belongs with the email, not up in the app chrome. -->
             <div class="col-head">This email <span class="spacer"></span>
+                <button class="linkbtn" id="btnCopyDeck">edit copy</button>
                 <button class="linkbtn" id="btnClear">clear</button>
             </div>
             <div class="col-body" id="compose"></div>
@@ -654,12 +664,12 @@
      the copy has been written gets a realistic example here, so the engineer
      sees the exact email rather than a list of variable names. Saved with the
      template, inside the composition, and shown on the shared link. -->
-<dialog id="examplesDlg" class="midw">
-    <div class="modal-head"><strong>Example values</strong><div class="spacer"></div>
-        <button class="primary" type="button" id="examplesClose">Done</button>
+<dialog id="copyDlg" class="wide">
+    <div class="modal-head"><strong>Edit copy</strong><div class="spacer"></div>
+        <button class="primary" type="button" id="copyClose">Done</button>
     </div>
-    <p class="hint" id="examplesNote"></p>
-    <div class="exlist" id="examplesList"></div>
+    <p class="hint" id="copyNote"></p>
+    <div class="deck" id="copyDeck"></div>
 </dialog>
 
 <dialog id="modal">
@@ -1057,16 +1067,11 @@ function renderCompose() {
                     (a ? '<button type="button" class="linkbtn" data-clearimg="' + item.uid + '|' + k + '">clear</button>' : '') +
                 '</span>';
             } else if (spec.type === 'text' || spec.type === 'textarea') {
-                /* A field still holding its {{ placeholder }} is dimmed, so at a
-                 * glance you can tell what has been written from what is still
-                 * waiting to be filled in at send time. */
-                var val = vals[k] === undefined ? '' : String(vals[k]);
-                var untouched = /^\{\{[a-zA-Z0-9_\s]+\}\}$/.test(val.trim());
-                var attrs = ' class="copyin' + (untouched ? ' ph' : '') + '"' +
-                    ' data-copy="' + item.uid + '|' + k + '" spellcheck="true"';
-                field = spec.type === 'textarea'
-                    ? '<textarea' + attrs + ' rows="3">' + esc(val) + '</textarea>'
-                    : '<input type="text"' + attrs + ' value="' + esc(val) + '">';
+                /* Words live in the copy deck, not here. This panel is for how a
+                 * section is built — sizes, alignment, uploads, how many rows —
+                 * and offering the same sentence in two places is how two
+                 * versions of it end up in circulation. */
+                continue;
             } else {
                 var cur = vals[k];
                 if (spec.type === 'bool') {
@@ -1083,15 +1088,11 @@ function renderCompose() {
                     }).join('') + '</select>';
                 }
             }
-            /* Copy fields get the full width under their label; everything else
-               stays on one line beside it. */
-            var wide = (spec.type === 'text' || spec.type === 'textarea');
-            opts += '<div class="opt' + (wide ? ' stackopt' : '') + '">' +
-                '<label>' + esc(spec.label) + '</label>' + field + '</div>';
+            opts += '<div class="opt"><label>' + esc(spec.label) + '</label>' + field + '</div>';
         }
-        /* Blocks like Help prompt have nothing to configure. Saying so beats
-         * opening an empty panel and leaving you wondering what failed. */
-        if (!opts) opts = '<div class="noopts">Nothing to configure on this one.</div>';
+        /* Some sections are nothing but words, so once those move to the copy deck
+         * there is nothing left here. Saying so beats an empty panel. */
+        if (!opts) opts = '<div class="noopts">Only copy on this one — use <b>edit copy</b> above.</div>';
         return '<div class="item' + (item.open ? ' open' : '') + '" data-uid="' + item.uid + '">' +
             '<div class="item-head" data-toggle="' + item.uid + '" title="Click for options, drag to reorder">' +
                 '<span class="t">' + esc(b.name) + '</span>' +
@@ -2237,20 +2238,6 @@ document.getElementById('compose').addEventListener('click', function (e) {
     }
 });
 
-/* Copy is typed, so it repaints on every keystroke and must never rebuild the
- * list — doing so would drop focus mid-word. The dimmed-placeholder class is
- * toggled here by hand rather than by re-rendering, for the same reason. */
-document.getElementById('compose').addEventListener('input', function (e) {
-    var f = e.target.closest('[data-copy]');
-    if (!f) return;
-    var p = f.getAttribute('data-copy').split('|');
-    var idx = indexOfUid(parseInt(p[0], 10));
-    if (idx < 0) return;
-    state.items[idx].opts[p[1]] = f.value;
-    f.classList.toggle('ph', /^\{\{[a-zA-Z0-9_\s]+\}\}$/.test(f.value.trim()));
-    renderPreview(); touch();
-});
-
 /* Option changes only repaint the preview — rebuilding the list here would
  * yank focus out of the control the user is still using. */
 document.getElementById('compose').addEventListener('change', function (e) {
@@ -2399,62 +2386,212 @@ segPair('tabHtml', 'tabVars',
     function () { exportTab = 'html'; refreshModal(); },
     function () { exportTab = 'vars'; refreshModal(); });
 
-/* ---------------------------------------------------------------- examples */
+/* --------------------------------------------------------------- copy deck */
 
-/* One row per merge field the document still contains, in the order they appear
- * in the email. Writing copy over a placeholder removes it from this list on its
- * own, so the list shrinks as the template gets more finished — it is the
- * engineer's to-do list, and it should be as short as possible. */
-function renderExamples() {
-    var vars = extractVariables(buildDocument());
-    var filled = 0;
+/* Every word in the email in one place, section by section, in reading order.
+ *
+ * A slot whose shipped value is still its default placeholder is in "variable"
+ * mode: the box holds the copy you think belongs there, and the email still ships
+ * {{email_subtitle}} for engineering to fill. Tick "ships as written" and the box
+ * becomes the words themselves, baked into the template.
+ *
+ * One box either way. Typing the sentence twice — once as copy, once as the thing
+ * that ships — is how two versions of it end up in circulation. */
 
-    var rows = vars.map(function (v) {
-        var set = !!(state.examples[v] && String(state.examples[v]).trim());
-        if (set) filled++;
-        return '<div class="exrow">' +
-            '<code title="{{' + esc(v) + '}}">{{' + esc(v) + '}}</code>' +
-            '<input type="text" data-ex="' + esc(v) + '"' +
-                (set ? ' class="set"' : '') +
-                ' value="' + esc(set ? state.examples[v] : '') + '"' +
-                ' placeholder="' + esc(SAMPLE[v] !== undefined ? String(SAMPLE[v]).slice(0, 40) : 'example value') + '">' +
-        '</div>';
-    }).join('');
-
-    document.getElementById('examplesList').innerHTML = vars.length
-        ? rows
-        : '<div class="empty">No merge fields left — every word in this email is fixed copy.</div>';
-
-    var note = document.getElementById('examplesNote');
-    if (!vars.length) {
-        note.textContent = 'Nothing for engineering to supply. The email is complete as it stands.';
-        note.className = 'hint exdone';
-        return;
-    }
-    note.textContent = filled + ' of ' + vars.length + ' filled in. ' +
-        'These are what the engineer sees on the shared link, so they know exactly ' +
-        'what belongs in each field. Anything left blank falls back to generic filler.';
-    note.className = 'hint' + (filled === vars.length ? ' exdone' : '');
+/* Exactly one placeholder and nothing else. Only those slots can be variables;
+ * a default like 'Download' or 'Need help?' is fixed copy by nature. */
+function loneVar(s) {
+    var m = /^\s*\{\{\s*([a-zA-Z0-9_]+)\s*\}\}\s*$/.exec(String(s === undefined ? '' : s));
+    return m ? m[1] : null;
 }
 
-document.getElementById('btnExamples').addEventListener('click', function () {
-    renderExamples();
-    document.getElementById('examplesDlg').showModal();
+/* The name the document actually emits. renderItems suffixes the 2nd and later
+ * instance of a block, so the second Paragraph's {{body_text}} arrives as
+ * {{body_text_2}} — and that, not the un-suffixed name, is what an example has
+ * to be filed under. */
+function emittedName(base, nth) { return nth > 1 ? base + '_' + nth : base; }
+
+/* What an empty box suggests: the generic filler for that field, so it is obvious
+ * what kind of thing belongs there before anyone has written it. */
+function deckHint(s) {
+    if (s.varName) {
+        if (SAMPLE[s.varName] !== undefined) return String(SAMPLE[s.varName]).slice(0, 60);
+        var base = s.varName.replace(/_\d+$/, '');
+        if (SAMPLE[base] !== undefined) return String(SAMPLE[base]).slice(0, 60);
+    }
+    return s.isVar ? 'the copy that belongs here' : 'the words that ship';
+}
+
+function copySlots() {
+    var counts = {}, out = [];
+    state.items.forEach(function (item) {
+        var b = blockById(item.blockId);
+        if (!b) return;
+        counts[b.id] = (counts[b.id] || 0) + 1;
+        var nth = counts[b.id];
+        var vals = withDefaults(b, item.opts);
+
+        for (var k in b.opts) {
+            if (!Object.prototype.hasOwnProperty.call(b.opts, k)) continue;
+            var spec = b.opts[k];
+            if (spec.type !== 'text' && spec.type !== 'textarea') continue;
+            /* Hidden options are not part of this email as configured. */
+            if (spec.showIf && !spec.showIf(vals)) continue;
+
+            var base = loneVar(spec.default);
+            var varName = base ? emittedName(base, nth) : null;
+            /* Untouched at its default placeholder means it is still a variable. */
+            var isVar = !!base && String(vals[k]).trim() === String(spec.default).trim();
+
+            out.push({
+                uid: item.uid, key: k, spec: spec, block: b, nth: nth,
+                varName: varName, isVar: isVar,
+                text: isVar ? (state.examples[varName] || '') : String(vals[k] === undefined ? '' : vals[k])
+            });
+        }
+    });
+    return out;
+}
+
+function renderCopyDeck() {
+    var slots = copySlots();
+    var covered = {};
+    slots.forEach(function (s) { if (s.varName) covered[s.varName] = true; });
+
+    var html = '', lastBlock = null, written = 0;
+
+    slots.forEach(function (s) {
+        var head = s.block.name + (s.nth > 1 ? ' #' + s.nth : '');
+        if (head !== lastBlock) {
+            if (lastBlock !== null) html += '</div>';
+            html += '<div class="decksec"><div class="deckhd">' + esc(head) + '</div>';
+            lastBlock = head;
+        }
+        if (String(s.text).trim()) written++;
+
+        var id = s.uid + '|' + s.key + '|' + (s.varName || '');
+        var big = s.spec.type === 'textarea';
+        html += '<div class="deckrow">' +
+            '<div class="deckl">' + esc(s.spec.label) +
+                (s.isVar ? '<span class="var">{{' + esc(s.varName) + '}}</span>' : '') +
+                '<span class="spacer"></span>' +
+                (s.varName
+                    ? '<label class="deckfix" title="Bake these words into the template instead of passing them in">' +
+                        '<input type="checkbox" data-fix="' + esc(id) + '"' + (s.isVar ? '' : ' checked') + '>' +
+                        'ships as written</label>'
+                    : '<span class="deckfix">always shipped</span>') +
+            '</div>' +
+            (big
+                ? '<textarea class="deckin' + (s.isVar ? '' : ' fixed') + '" rows="3" data-slot="' + esc(id) + '"' +
+                  ' placeholder="' + esc(deckHint(s)) + '">' + esc(s.text) + '</textarea>'
+                : '<input type="text" class="deckin' + (s.isVar ? '' : ' fixed') + '" data-slot="' + esc(id) + '"' +
+                  ' value="' + esc(s.text) + '" placeholder="' + esc(deckHint(s)) + '">') +
+        '</div>';
+    });
+    if (lastBlock !== null) html += '</div>';
+
+    /* Everything else the document asks for: the values, amounts, dates and URLs
+     * that have no copy slot because they genuinely differ per recipient. */
+    var rest = extractVariables(buildDocument()).filter(function (v) { return !covered[v]; });
+    if (rest.length) {
+        html += '<div class="decksec"><div class="deckhd">Supplied per recipient</div>' +
+            rest.map(function (v) {
+                var set = !!(state.examples[v] && String(state.examples[v]).trim());
+                if (set) written++;
+                return '<div class="deckrow">' +
+                    '<div class="deckl"><span class="var">{{' + esc(v) + '}}</span>' +
+                        '<span class="spacer"></span><span class="deckfix">example only</span></div>' +
+                    '<input type="text" class="deckin" data-ex="' + esc(v) + '"' +
+                        ' value="' + esc(set ? state.examples[v] : '') + '"' +
+                        ' placeholder="' + esc(SAMPLE[v] !== undefined ? String(SAMPLE[v]).slice(0, 48) : 'example value') + '">' +
+                '</div>';
+            }).join('') + '</div>';
+    }
+
+    var total = slots.length + rest.length;
+    document.getElementById('copyDeck').innerHTML = total
+        ? html
+        : '<div class="empty">Nothing to write yet.<br>Add a section on the left first.</div>';
+
+    var note = document.getElementById('copyNote');
+    note.textContent = total
+        ? written + ' of ' + total + ' written. Anything left blank falls back to generic ' +
+          'filler in the preview. Ticking “ships as written” bakes those words into the ' +
+          'template; leaving it clear keeps the merge field and treats your words as the ' +
+          'copy the engineer should expect.'
+        : '';
+    note.className = 'hint' + (total && written === total ? ' deckdone' : '');
+}
+
+document.getElementById('btnCopyDeck').addEventListener('click', function () {
+    renderCopyDeck();
+    document.getElementById('copyDlg').showModal();
 });
-document.getElementById('examplesClose').addEventListener('click', function () {
-    document.getElementById('examplesDlg').close();
+document.getElementById('copyClose').addEventListener('click', function () {
+    document.getElementById('copyDlg').close();
 });
 
-document.getElementById('examplesList').addEventListener('input', function (e) {
-    var f = e.target.closest('[data-ex]');
+/* Typing repaints the preview but never the deck — rebuilding it would drop focus
+ * mid-word, exactly as it would in the section list. */
+document.getElementById('copyDeck').addEventListener('input', function (e) {
+    var ex = e.target.closest('[data-ex]');
+    if (ex) {
+        var v = ex.getAttribute('data-ex');
+        if (ex.value.trim()) state.examples[v] = ex.value;
+        else delete state.examples[v];
+        renderPreview(); touch();
+        return;
+    }
+
+    var f = e.target.closest('[data-slot]');
     if (!f) return;
-    var v = f.getAttribute('data-ex');
-    if (f.value.trim()) state.examples[v] = f.value;
-    else delete state.examples[v];
-    f.classList.toggle('set', !!f.value.trim());
-    /* The preview behind the dialog updates live, so you can see the value land
-     * in the email as you type it. */
+    var p = f.getAttribute('data-slot').split('|');
+    var idx = indexOfUid(parseInt(p[0], 10));
+    if (idx < 0) return;
+    var b = blockById(state.items[idx].blockId);
+    var spec = b.opts[p[1]];
+    var varName = p[2];
+
+    /* Where the words go depends on the mode: into the template, or into the
+     * example filed against the merge field the template still carries. Read off
+     * the checkbox rather than a CSS class — the class is a consequence, not the
+     * state. A slot with no merge field behind it can only ever be shipped. */
+    var fixBox = document.querySelector('[data-fix="' + f.getAttribute('data-slot') + '"]');
+    var fixed = !varName || (fixBox ? fixBox.checked : true);
+    if (fixed) {
+        state.items[idx].opts[p[1]] = f.value;
+    } else {
+        if (f.value.trim()) state.examples[varName] = f.value;
+        else delete state.examples[varName];
+        state.items[idx].opts[p[1]] = spec.default;
+    }
     renderPreview(); touch();
+});
+
+/* Flipping the mode moves the words between the two stores rather than losing
+ * them, so ticking the box turns your copy into the shipped text and unticking it
+ * turns the shipped text back into a suggestion. */
+document.getElementById('copyDeck').addEventListener('change', function (e) {
+    var t = e.target.closest('[data-fix]');
+    if (!t) return;
+    var p = t.getAttribute('data-fix').split('|');
+    var idx = indexOfUid(parseInt(p[0], 10));
+    if (idx < 0) return;
+    var b = blockById(state.items[idx].blockId);
+    var spec = b.opts[p[1]];
+    var varName = p[2];
+    var box = document.querySelector('[data-slot="' + t.getAttribute('data-fix') + '"]');
+    var words = box ? box.value : '';
+
+    if (t.checked) {
+        state.items[idx].opts[p[1]] = words;
+        if (varName) delete state.examples[varName];
+    } else {
+        state.items[idx].opts[p[1]] = spec.default;
+        if (varName && String(words).trim()) state.examples[varName] = words;
+    }
+    renderCopyDeck();
+    renderCompose(); renderPreview(); touch();
 });
 
 /* ------------------------------------------------------------------ export */

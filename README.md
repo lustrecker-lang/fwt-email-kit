@@ -448,34 +448,35 @@ delivered email, so treat the Variables list as a required checklist.
 
 ### Writing the copy, and handing it over
 
-Two different things live in an email, and the split is what makes the handover
-unambiguous:
+**edit copy**, on the *This email* column header, is the one place words are
+written. Every text slot in the email, grouped by section, in reading order —
+followed by the fields that have no slot because they differ per recipient: the
+subject line, the preheader, reference numbers, amounts.
 
-- **Words that never change.** The title, the body, the button label, "What
-  happens next", the row labels in Details, the do-not-reply notice. Every one of
-  these is now a text box in the section's options, pre-filled with the
-  placeholder it used to emit. Type over it and the words are baked into the
-  template. Leave it and nothing changes.
-- **Words that differ per recipient.** The name, the reference, the amount, the
-  dates. These stay `{{ merge fields }}` because they have to.
+The section options panel deliberately has no text fields in it. It is for how a
+section is *built* — sizes, alignment, uploads, how many rows. Offering the same
+sentence in two places is how two versions of it end up in circulation.
 
-Both can live in the same field, which is the point: `Dear {{first_name}}, your
+Each slot has one box and, where it makes sense, one choice:
+
+- **Left clear** (the default) — the email still ships `{{email_subtitle}}` and
+  your words are recorded as the copy that belongs there. The dev gets both: the
+  placeholder to paste, and your sentence to understand what it means.
+- **Ships as written** — the words are baked into the template and the merge field
+  disappears. For anything that never varies: "What happens next", the
+  do-not-reply notice, a button label.
+
+Flipping the tick moves the words between the two rather than losing them, so you
+can change your mind freely. Slots with no merge field behind them — the Download
+button's label, "Need help?" — say **always shipped** and have no choice to make.
+
+Copy and variables mix in one box, which is the point: `Dear {{first_name}}, your
 application of {{applied_on}} was approved.` Typed copy is escaped so a stray `<`
 or `&` cannot break the email, and `{{ }}` survives escaping untouched. A blank
 line starts a new paragraph.
 
-A field still holding its placeholder is shown dimmed and in monospace, so you
-can see at a glance what has been written and what is still waiting.
-
-**Examples** in the editor header lists every merge field the email still
-contains, and lets you type a realistic value for each — `first_name` → Amara,
-`total_amount` → BBD $175.00. The subject line and preheader are always on this
-list, because they are set at send time rather than in a section. The list shrinks
-as you write copy over placeholders, so it ends up being exactly what engineering
-must supply and nothing more.
-
-Examples are saved inside the template's `composition`, which is already `jsonb`,
-so this needed no migration.
+All of it is saved inside the template's `composition`, which is already `jsonb`,
+so none of this needed a migration.
 
 ### What the engineer receives
 
