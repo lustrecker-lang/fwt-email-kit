@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Email Kit</title>
+<!-- App chrome only. This mark identifies the tool, not any project — an email's
+     logo comes from the project brand and must be an absolute https URL, which a
+     relative path like this one could never be. See the Logos note in README. -->
+<link rel="icon" type="image/png" href="public/icon_email.png">
+<link rel="apple-touch-icon" href="public/icon_email.png">
 <style>
     /* No brand colour. The accent is simply ink — the UI is greyscale, so the
      * only colour on screen belongs to the email being built, or to a status
@@ -62,6 +67,10 @@
         width: 360px; max-width: 92vw; background: var(--panel);
         border: 1px solid var(--line); border-radius: 16px; padding: 30px 28px;
     }
+    .loginbox .mark {
+        width: 34px; height: 34px; display: block;
+        object-fit: contain; margin: 0 0 14px;
+    }
     .loginbox h1 { margin: 0 0 4px; font-size: 21px; letter-spacing: -0.4px; }
     .loginbox h1 span { color: var(--muted); font-weight: 400; }
     .loginbox p.sub { margin: 0 0 22px; font-size: 13px; color: var(--muted); line-height: 1.55; }
@@ -76,19 +85,50 @@
         display: flex; align-items: center; gap: 12px; padding: 13px 22px;
         background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0;
     }
-    .brand { font-weight: 700; letter-spacing: -0.3px; font-size: 15px; }
+    .brand {
+        display: flex; align-items: center; gap: 9px;
+        font-weight: 700; letter-spacing: -0.3px; font-size: 15px;
+    }
     .brand span { color: var(--muted); font-weight: 400; }
-    .who { font-size: 12.5px; color: var(--muted); }
+    /* The app mark. Fixed square box so a differently-proportioned file cannot
+     * change the height of the bar; object-fit keeps it undistorted inside it. */
+    .brand .mark {
+        width: 22px; height: 22px; flex-shrink: 0;
+        display: block; object-fit: contain;
+    }
+
+    /* Icon-only nav actions. The anchor needs the button's box drawn on it by
+       hand, since button {} cannot reach an <a>. */
+    .navicon {
+        padding: 0; width: 34px; height: 31px; flex-shrink: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid var(--line); border-radius: 8px;
+        background: var(--panel); color: var(--ink);
+        text-decoration: none; cursor: pointer;
+    }
+    .navicon:hover { border-color: var(--accent); color: var(--accent); }
+    .navicon svg {
+        width: 16px; height: 16px; display: block;
+        fill: none; stroke: currentColor; stroke-width: 1.4;
+        stroke-linecap: round; stroke-linejoin: round;
+    }
     .back {
         border: 0; background: none; font-size: 17px; color: var(--muted);
         padding: 4px 8px; border-radius: 7px; cursor: pointer; line-height: 1;
     }
     .back:hover { background: var(--accent-soft); color: var(--accent); border: 0; }
 
+    /* --------------------------------------------------- page title & filter */
+    /* The title owns the page's one action, so New template sits beside the
+       heading rather than in the nav bar with the navigation. */
+    .pagehead { display: flex; align-items: center; gap: 14px; margin: 2px 0 16px; }
+    .pagehead h1 { margin: 0; font-size: 23px; letter-spacing: -0.5px; font-weight: 700; }
+
     /* ------------------------------------------------------- project filter */
+    /* Inside the scrolling body, directly under the title: it filters the table
+       below it, so it reads as part of the table rather than app chrome. */
     .filters {
-        display: flex; align-items: center; gap: 7px; padding: 12px 22px;
-        background: var(--panel); border-bottom: 1px solid var(--line);
+        display: flex; align-items: center; gap: 7px; margin: 0 0 18px;
         flex-shrink: 0; overflow-x: auto;
     }
     /* Uses the same .seg control as the editor toolbars. The count has to read on
@@ -101,14 +141,16 @@
     .inner { max-width: 1040px; margin: 0 auto; }
 
     /* ------------------------------------------------------- template table */
-    table.tpl { width: 100%; border-collapse: collapse; }
+    /* Keep the row hover treatment off the content edge as well as keeping the
+       text inside its cells. */
+    table.tpl { width: calc(100% - 16px); margin: 0 8px; border-collapse: collapse; }
     table.tpl th {
         text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px;
-        color: var(--muted); font-weight: 700; padding: 0 14px 9px 0;
+        color: var(--muted); font-weight: 700; padding: 0 16px 9px;
         border-bottom: 1px solid var(--line); white-space: nowrap;
     }
     table.tpl td {
-        padding: 11px 14px 11px 0; border-bottom: 1px solid var(--line); vertical-align: middle;
+        padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: middle;
     }
     table.tpl tbody tr { cursor: pointer; }
     table.tpl tbody tr:hover td { background: var(--accent-soft); }
@@ -117,7 +159,7 @@
     table.tpl td.pj { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
     table.tpl td.when { font-size: 12px; color: var(--muted); white-space: nowrap; }
     table.tpl td.st, table.tpl th.st { width: 1%; white-space: nowrap; }
-    table.tpl td.acts { width: 1%; white-space: nowrap; text-align: right; padding-right: 0; }
+    table.tpl td.acts { width: 1%; white-space: nowrap; text-align: right; }
 
     /* Live / draft switch. Green is a status, not a brand colour — it is the
        one thing on the templates screen allowed to be coloured, because it is
@@ -435,6 +477,7 @@
 <!-- =========================================================== 1. LOGIN -->
 <section class="view" id="viewLogin">
     <form class="loginbox" id="loginForm">
+        <img class="mark" src="public/icon_email.png" alt="" width="34" height="34">
         <h1>Email <span>Kit</span></h1>
         <p class="sub">Sign in to build and save email templates.</p>
         <div class="row">
@@ -454,15 +497,34 @@
 <!-- ======================================================= 2. TEMPLATES -->
 <section class="view" id="viewTemplates">
     <div class="apphead">
-        <div class="brand">Email <span>Kit</span></div>
+        <div class="brand">
+            <img class="mark" src="public/icon_email.png" alt="" width="22" height="22">
+            Email <span>Kit</span>
+        </div>
         <div class="spacer"></div>
         <button type="button" id="btnProjects">Projects</button>
-        <a href="library.html" target="_blank"><button type="button">Shared link</button></a>
-        <button type="button" id="btnSignOut">Sign out</button>
-        <button class="primary" type="button" id="btnNew">New template</button>
+        <!-- Icon-only, so the bar carries navigation and nothing else. Both keep a
+             title and an aria-label, since there is no longer a word to read. -->
+        <a class="navicon" href="library.html" target="_blank" rel="noopener"
+           title="Open the shared library" aria-label="Open the shared library">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.3 2.2h4.5v4.5"/><path d="M13.8 2.2 7.6 8.4"/><path d="M12.4 9.9v3a.9.9 0 0 1-.9.9H3.1a.9.9 0 0 1-.9-.9V4.5a.9.9 0 0 1 .9-.9h3"/></svg>
+        </a>
+        <button class="navicon" type="button" id="btnSignOut"
+                title="Sign out" aria-label="Sign out">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 13.8H3.4a.9.9 0 0 1-.9-.9V3.1a.9.9 0 0 1 .9-.9h2.8"/><path d="M10.4 11.2 13.6 8l-3.2-3.2"/><path d="M13.6 8H6.4"/></svg>
+        </button>
     </div>
-    <div class="filters" id="filters"></div>
-    <div class="body"><div class="inner" id="tplList"><div class="blank">Loading…</div></div></div>
+    <div class="body"><div class="inner">
+        <!-- Title, action and filter travel together, above the table they act on.
+             The bar above is navigation only. -->
+        <div class="pagehead">
+            <h1>Templates</h1>
+            <div class="spacer"></div>
+            <button class="primary" type="button" id="btnNew">New template</button>
+        </div>
+        <div class="filters" id="filters"></div>
+        <div id="tplList"><div class="blank">Loading…</div></div>
+    </div></div>
 </section>
 
 <!-- ================================================== 3. PROJECT LIST -->
@@ -471,7 +533,6 @@
         <button class="back" id="btnProjBack" title="Back to templates">←</button>
         <div class="brand">Projects</div>
         <div class="spacer"></div>
-        <span class="who">Brand settings apply to every template in a project</span>
         <button class="primary" type="button" id="btnAddProject">Add project</button>
     </div>
     <div class="body"><div class="inner" id="projList"></div></div>

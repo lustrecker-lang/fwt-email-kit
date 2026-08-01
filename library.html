@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Email Library</title>
+<link rel="icon" type="image/png" href="public/icon_email.png">
+<link rel="apple-touch-icon" href="public/icon_email.png">
 <style>
     /* Greyscale by design — see the note in index.html. The accent is ink, so
      * nothing here competes with the email in the preview pane. */
@@ -33,8 +35,15 @@
         display: flex; align-items: center; gap: 12px; padding: 13px 18px;
         background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0;
     }
-    .brand { font-weight: 700; letter-spacing: -0.3px; font-size: 15px; }
+    .brand {
+        display: flex; align-items: center; gap: 9px;
+        font-weight: 700; letter-spacing: -0.3px; font-size: 15px;
+    }
     .brand span { color: var(--muted); font-weight: 400; }
+    .brand .mark {
+        width: 22px; height: 22px; flex-shrink: 0;
+        display: block; object-fit: contain;
+    }
     .spacer { flex: 1; }
     input[type="search"] {
         font: inherit; font-size: 13.5px; padding: 7px 11px; border: 1px solid var(--line);
@@ -67,9 +76,40 @@
         width: 300px; border-right: 1px solid var(--line); background: var(--panel);
         overflow-y: auto; flex-shrink: 0; padding: 8px;
     }
-    .grp {
-        font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
-        color: var(--muted); padding: 14px 10px 6px;
+    /* Projects fold, so a library holding four of them stays scannable. The mark
+       makes a project identifiable before its name is read. */
+    .grp { margin-bottom: 2px; }
+    .grph {
+        display: flex; align-items: center; gap: 8px; width: 100%;
+        padding: 7px 8px; border: 0; border-radius: 8px; background: none;
+        font: inherit; color: var(--muted); cursor: pointer; text-align: left;
+    }
+    .grph:hover { background: var(--accent-soft); color: var(--accent); }
+    .grph .caret {
+        width: 13px; height: 13px; flex-shrink: 0;
+        fill: none; stroke: currentColor; stroke-width: 1.6;
+        stroke-linecap: round; stroke-linejoin: round;
+        transform: rotate(90deg); transition: transform .15s;
+    }
+    .grp.shut .grph .caret { transform: none; }
+    .grp.shut .grpb { display: none; }
+    .gn {
+        flex: 1; min-width: 0; font-size: 10.5px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: .6px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .gc { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+    .pmark {
+        width: 18px; height: 18px; flex-shrink: 0; border-radius: 4px;
+        display: block; object-fit: contain;
+    }
+    /* Every shipped project starts with no logo, so this fallback is what most
+       of them actually show. Grey monograms would make four projects look
+       identical — the one thing the mark exists to prevent — so this is the
+       single place the page steps outside its greyscale. */
+    .pmark.mono {
+        display: flex; align-items: center; justify-content: center;
+        font-size: 9.5px; font-weight: 700; letter-spacing: 0; color: #fff;
     }
     .row { padding: 10px 11px; border-radius: 8px; cursor: pointer; }
     .row:hover { background: var(--accent-soft); }
@@ -145,7 +185,10 @@
 <body>
 
 <header>
-    <div class="brand">Email <span>Library</span></div>
+    <div class="brand">
+        <img class="mark" src="public/icon_email.png" alt="" width="22" height="22">
+        Email <span>Library</span>
+    </div>
     <div class="spacer"></div>
     <span class="meta" id="count"></span>
     <button id="reload">Reload</button>
@@ -205,8 +248,21 @@
 
 var rows = [], current = null, view = 'preview', suppressHash = false, labels = false;
 
-function projectLabel(key) {
-    return (typeof THEMES !== 'undefined' && THEMES[key] && THEMES[key].label) || key;
+/* Which project sections are folded. Per session and held here rather than in
+ * the DOM, because show() re-renders the list to move the selection highlight —
+ * reading it back off the markup would reopen whatever you just folded. */
+var collapsed = {};
+
+/* The project's mark at list scale. A logo when the project has one; otherwise
+ * its initial on the brand colour, which is the default case for all four
+ * shipped projects. */
+function projectMark(t) {
+    if (t.logoUrl) {
+        return '<img class="pmark" src="' + esc(t.logoUrl) + '" alt="">';
+    }
+    var initial = (t.label || t.key || '?').trim().charAt(0).toUpperCase();
+    return '<span class="pmark mono" style="background:' + esc(t.brand) + '" aria-hidden="true">' +
+        esc(initial) + '</span>';
 }
 
 function renderList() {
@@ -228,13 +284,26 @@ function renderList() {
     });
 
     document.getElementById('list').innerHTML = groups.map(function (g) {
-        return '<div class="grp">' + projectLabel(g) + '</div>' + byGroup[g].map(function (r) {
-            return '<div class="row' + (current && current.id === r.id ? ' on' : '') + '" data-id="' + r.id + '">' +
-                '<div class="n">' + esc(r.name) +
-                    (r.is_live ? '<span class="live">Live</span>' : '') + '</div>' +
-                (r.description ? '<div class="d">' + esc(r.description) + '</div>' : '') +
-            '</div>';
-        }).join('');
+        var t = makeTheme(g);
+        /* Open unless folded: someone arriving on a link must be able to see the
+         * template that link points at. */
+        var open = !collapsed[g];
+        return '<div class="grp' + (open ? '' : ' shut') + '">' +
+            '<button type="button" class="grph" data-grp="' + esc(g) + '"' +
+                    ' aria-expanded="' + open + '">' +
+                '<svg class="caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>' +
+                projectMark(t) +
+                '<span class="gn">' + esc(t.label) + '</span>' +
+                '<span class="gc">' + byGroup[g].length + '</span>' +
+            '</button>' +
+            '<div class="grpb">' + byGroup[g].map(function (r) {
+                return '<div class="row' + (current && current.id === r.id ? ' on' : '') + '" data-id="' + r.id + '">' +
+                    '<div class="n">' + esc(r.name) +
+                        (r.is_live ? '<span class="live">Live</span>' : '') + '</div>' +
+                    (r.description ? '<div class="d">' + esc(r.description) + '</div>' : '') +
+                '</div>';
+            }).join('') + '</div>' +
+        '</div>';
     }).join('');
 }
 
@@ -322,7 +391,13 @@ function show(id) {
 
 function loadAll() {
     document.getElementById('list').innerHTML = '<div class="empty">Loading…</div>';
-    Api.listTemplates().then(function (r) {
+    /* Brands are needed here now: the sidebar shows each project's logo and its
+     * saved name, and a project added in the app exists only as a brand row, so
+     * without this it would be listed by its raw key. project_brands allows
+     * anonymous select, so this works with no sign-in. Failure is not fatal —
+     * makeTheme falls back to the shipped defaults in theme.js. */
+    Api.listBrands().then(setBrandOverrides).catch(function () { /* defaults are fine */ })
+    .then(function () { return Api.listTemplates(); }).then(function (r) {
         rows = r;
         renderList();
         /* A link straight to one template wins over "show the first one", which
@@ -345,6 +420,15 @@ window.addEventListener('hashchange', function () {
 });
 
 document.getElementById('list').addEventListener('click', function (e) {
+    /* Checked first: a project header is not inside a row, but testing it before
+     * the row keeps the two from ever competing. */
+    var grp = e.target.closest('[data-grp]');
+    if (grp) {
+        var key = grp.getAttribute('data-grp');
+        collapsed[key] = !collapsed[key];
+        renderList();
+        return;
+    }
     var row = e.target.closest('[data-id]');
     if (row) show(row.getAttribute('data-id'));
 });
