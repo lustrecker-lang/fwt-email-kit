@@ -153,18 +153,19 @@ Already done for this project, but for the record — or to stand up a second on
    it. That creates the `email_templates` table, the row-level security
    policies, and the public `email-assets` bucket.
 
-   > **Re-run it on an existing project** to pick up three later additions:
+   > **Re-run it on an existing project** to pick up later additions:
    > document upload (the bucket originally allowed images only, at 5 MB, so a
    > PDF came back as a mime error), the `font` column on `project_brands`, and
-   > the `is_live` column on `email_templates` that backs the Live / Draft
-   > switch, and the `social` and `stamp_url` columns on `project_brands`. The
-   > script is idempotent — `on conflict do update` widens the bucket in place,
-   > `add column if not exists` adds the columns, and no stored file or row is
-   > touched.
+   > the `status` column on `email_templates` that provides the Draft, Approved
+   > and Live workflow (while retaining `is_live` as the legacy Live marker),
+   > and the `social` and `stamp_url` columns on `project_brands`. The script is
+   > idempotent — `on conflict do update` widens the bucket in place, `add column
+   > if not exists` adds the columns, and existing Live / Draft values are carried
+   > forward as Live / Draft status without altering the template content.
    >
-   > Until `is_live` exists the switch simply does not appear: the first `400`
-   > from PostgREST latches the column off and the template list is re-fetched
-   > without it, rather than the whole screen failing.
+   > Until `status` exists the template list retains the earlier Live / Draft
+   > switch. The first `400` from PostgREST latches the missing column off and
+   > re-fetches the list without it, rather than the whole screen failing.
 3. **Authentication → Sign In / Providers → Email → turn off "Allow new users to
    sign up".** The policies grant write access to any signed-in user, so leaving
    sign-ups open would let anyone register and edit your templates.

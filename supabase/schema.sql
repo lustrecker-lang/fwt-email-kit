@@ -13,15 +13,26 @@ create table if not exists email_templates (
     html                text not null,          -- rendered output, ready to paste into SendGrid
     variables           text[] not null default '{}',
     sendgrid_template_id text,                  -- filled in later by the sync script
-    is_live             boolean not null default false,  -- in production, vs. still a draft
+    status              text not null default 'draft' check (status in ('draft', 'approved', 'live')),
+    is_live             boolean not null default false,  -- legacy mirror of status = 'live'
     created_at          timestamptz not null default now(),
     updated_at          timestamptz not null default now()
 );
 
--- `create table if not exists` skips an existing table entirely, so a database
--- created before the live flag needs the column adding on its own. New drafts
--- default to false: nothing goes live until someone says so.
+-- `create table if not exists` skips an existing table entirely, so later
+-- workflow fields are added separately. Existing true is_live values become
+-- Live; every other existing template becomes Draft. is_live remains synced by
+-- the app for existing integrations that use it as the published marker.
 alter table email_templates add column if not exists is_live boolean not null default false;
+alter table email_templates add column if not exists status text;
+update email_templates
+set status = case when is_live then 'live' else 'draft' end
+where status is null;
+alter table email_templates alter column status set default 'draft';
+alter table email_templates alter column status set not null;
+alter table email_templates drop constraint if exists email_templates_status_check;
+alter table email_templates add constraint email_templates_status_check
+    check (status in ('draft', 'approved', 'live'));
 
 -- One name per project, so saving the same template twice updates rather than duplicates.
 create unique index if not exists email_templates_project_name_idx
@@ -32,6 +43,9 @@ create index if not exists email_templates_project_idx
 
 create index if not exists email_templates_is_live_idx
     on email_templates (is_live);
+
+create index if not exists email_templates_status_idx
+    on email_templates (status);
 
 -- Keep updated_at honest.
 create or replace function set_updated_at()

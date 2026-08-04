@@ -19,6 +19,7 @@
         --line: #e4e7ec; --accent: #16181d; --accent-soft: #eceef1;
         --on-accent: #ffffff;
         --live: #15803d; --live-soft: #f0f7f2; --live-line: #c2e2cc;
+        --approved: #a16207; --approved-soft: #fff8e8; --approved-line: #f2d59c;
         --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
@@ -28,6 +29,7 @@
             --line: #2c3037; --accent: #e8eaed; --accent-soft: #2a2f37;
             --on-accent: #14161a;
             --live: #57c98a; --live-soft: #18271e; --live-line: #2f4a39;
+            --approved: #f3bd62; --approved-soft: #302611; --approved-line: #5b4825;
         }
     }
     * { box-sizing: border-box; }
@@ -161,9 +163,20 @@
     table.tpl td.st, table.tpl th.st { width: 1%; white-space: nowrap; }
     table.tpl td.acts { width: 1%; white-space: nowrap; text-align: right; }
 
-    /* Live / draft switch. Green is a status, not a brand colour — it is the
-       one thing on the templates screen allowed to be coloured, because it is
-       the one thing that says "recipients are receiving this". */
+    /* Workflow status. A template is Draft while being written, Approved once
+       reviewed, and Live only when it is the version recipients should receive. */
+    .statussel {
+        width: 96px; max-width: none; padding: 4px 7px; border-radius: 100px;
+        font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+        line-height: 18px; cursor: pointer;
+    }
+    .statussel.draft { color: var(--muted); }
+    .statussel.approved { color: var(--approved); border-color: var(--approved-line); background: var(--approved-soft); }
+    .statussel.live { color: var(--live); border-color: var(--live-line); background: var(--live-soft); }
+    .statussel:disabled { cursor: default; opacity: .45; }
+    .statussel:disabled:hover { border-color: var(--line); }
+    /* Older databases briefly keep the previous two-state control until the
+       additive status migration has been applied. */
     .livetog {
         display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
         padding: 4px 11px 4px 9px; border-radius: 100px; border: 1px solid var(--line);
@@ -1361,9 +1374,14 @@ function renderTemplates() {
         '</tbody></table>';
 }
 
-/* Hidden entirely when the database predates the column, rather than showing a
- * switch that cannot work. Api.hasLiveColumn() latches false on the first 400. */
-function liveHtml(r) {
+/* The status migration is additive. While a database has only the legacy
+ * is_live field, retain the two-state control so the template list stays usable. */
+function templateStatus(r) {
+    return ['draft', 'approved', 'live'].indexOf(r.status) >= 0
+        ? r.status : (r.is_live ? 'live' : 'draft');
+}
+
+function legacyLiveHtml(r) {
     if (!Api.hasLiveColumn()) return '';
     var live = !!r.is_live;
     return '<button type="button" class="livetog' + (live ? ' on' : '') + '"' +
@@ -1372,12 +1390,23 @@ function liveHtml(r) {
         '<i></i>' + (live ? 'Live' : 'Draft') + '</button>';
 }
 
+function statusHtml(r) {
+    if (!Api.hasStatusColumn()) return legacyLiveHtml(r);
+    var status = templateStatus(r);
+    return '<select class="statussel ' + status + '" data-status="' + r.id + '"' +
+        ' aria-label="Status for ' + esc(r.name) + '" title="Set template status">' +
+        ['draft', 'approved', 'live'].map(function (value) {
+            return '<option value="' + value + '"' + (status === value ? ' selected' : '') + '>' +
+                value.charAt(0).toUpperCase() + value.slice(1) + '</option>';
+        }).join('') + '</select>';
+}
+
 function rowHtml(r, showProject) {
     return '<tr data-open="' + r.id + '">' +
         '<td class="nm"><b>' + esc(r.name) + '</b>' +
             (r.description ? '<small>' + esc(r.description) + '</small>' : '') + '</td>' +
         (showProject ? '<td class="pj">' + esc(makeTheme(r.project).label) + '</td>' : '') +
-        '<td class="st">' + liveHtml(r) + '</td>' +
+        '<td class="st">' + statusHtml(r) + '</td>' +
         '<td class="when">' + fmtDate(r.updated_at) + '</td>' +
         '<td class="acts">' +
             '<button class="iconbtn" data-copy="' + r.id + '" title="Duplicate into any project">⧉</button>' +
@@ -1407,8 +1436,13 @@ document.getElementById('filters').addEventListener('click', function (e) {
 });
 
 document.getElementById('tplList').addEventListener('click', function (e) {
+    /* A native select also raises click events. Stop this one so choosing a
+     * status does not open the row before its change event can persist it. */
+    var status = e.target.closest('[data-status]');
+    if (status) { e.stopPropagation(); return; }
+
     /* Before the [data-open] check below, and stopping propagation, so hitting
-     * the switch does not also open the template in the editor. */
+     * the legacy switch does not also open the template in the editor. */
     var lv = e.target.closest('[data-live]');
     if (lv) {
         e.stopPropagation();
@@ -1455,6 +1489,28 @@ document.getElementById('tplList').addEventListener('click', function (e) {
     }
     var open = e.target.closest('[data-open]');
     if (open) go('#/t/' + open.getAttribute('data-open'));
+});
+
+document.getElementById('tplList').addEventListener('change', function (e) {
+    var sel = e.target.closest('[data-status]');
+    if (!sel) return;
+    e.stopPropagation();
+    var id = sel.getAttribute('data-status');
+    var row = allTemplates.filter(function (r) { return r.id === id; })[0];
+    if (!row) return;
+    var next = sel.value;
+    if (next === templateStatus(row)) return;
+    sel.disabled = true;
+    Api.setStatus(id, next).then(function () {
+        row.status = next;
+        /* Keep the legacy field correct for the public library and any existing
+         * downstream integration that still treats it as the published flag. */
+        row.is_live = next === 'live';
+        renderTemplates();
+    }).catch(function (ex) {
+        renderTemplates();
+        toast('Could not change status: ' + ex.message, 'err');
+    });
 });
 
 /* ========================================================= project settings */

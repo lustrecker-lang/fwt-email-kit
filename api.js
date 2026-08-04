@@ -135,25 +135,33 @@ var Api = (function () {
 
     /* -------------------------------------------------------------- templates */
 
-    /* `is_live` arrived after the first databases were created, and the schema
-     * has to be re-run by hand in the Supabase SQL editor. Selecting a column
-     * that does not exist is a 400 from PostgREST, which would take the whole
-     * template list down — so the first miss latches this off, the request is
-     * retried without it, and the UI degrades to hiding the toggle. */
+    /* `status` arrived after the first databases were created, so both the
+     * status and legacy `is_live` columns are requested defensively. A missing
+     * column is a PostgREST 400; latch only that column off and retry so older
+     * projects can still list templates. `is_live` remains mirrored for links
+     * and integrations that already use it. */
     var liveColumn = true;
+    var statusColumn = true;
 
     var TPL_COLS = 'id,project,name,description,variables,sendgrid_template_id,updated_at';
 
     function hasLiveColumn() { return liveColumn; }
+    function hasStatusColumn() { return statusColumn; }
 
     function listTemplates() {
-        var wanted = liveColumn;
+        var wantedStatus = statusColumn;
+        var wantedLive = liveColumn;
         return authed(function () {
             return fetch(SUPABASE.url + '/rest/v1/email_templates' +
-                '?select=' + TPL_COLS + (wanted ? ',is_live' : '') +
-                '&order=project.asc,name.asc', { headers: headers() });
+                '?select=' + TPL_COLS + (wantedStatus ? ',status' : '') +
+                (wantedLive ? ',is_live' : '') + '&order=project.asc,name.asc',
+                { headers: headers() });
         }).then(function (r) {
-            if (!r.ok && wanted && r.status === 400) {
+            if (!r.ok && r.status === 400 && wantedStatus) {
+                statusColumn = false;
+                return listTemplates();
+            }
+            if (!r.ok && r.status === 400 && wantedLive) {
                 liveColumn = false;
                 return listTemplates();
             }
@@ -161,8 +169,36 @@ var Api = (function () {
         });
     }
 
-    /* Publish / unpublish. Deliberately a targeted PATCH rather than part of
-     * saveTemplate, so flipping the switch cannot also overwrite the HTML. */
+    /* Deliberately a targeted PATCH rather than part of saveTemplate, so
+     * changing workflow state cannot also overwrite the rendered HTML. */
+    function setStatus(id, status) {
+        if (['draft', 'approved', 'live'].indexOf(status) === -1) {
+            return Promise.reject(new Error('Unknown template status.'));
+        }
+        if (!statusColumn) {
+            if (status === 'approved') {
+                return Promise.reject(new Error(
+                    'This database has no status column yet. Re-run supabase/schema.sql ' +
+                    'in the Supabase SQL editor to add Approved.'));
+            }
+            return setLive(id, status === 'live').then(function () { return status; });
+        }
+        var patch = { status: status };
+        if (liveColumn) patch.is_live = status === 'live';
+        return authed(function () {
+            return fetch(SUPABASE.url + '/rest/v1/email_templates?id=eq.' + encodeURIComponent(id), {
+                method: 'PATCH',
+                headers: headers({ 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }),
+                body: JSON.stringify(patch)
+            });
+        }).then(function (r) {
+            if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Update failed'); });
+            return status;
+        });
+    }
+
+    /* Kept for a database that has the earlier Live/Draft column but has not
+     * yet had the status migration applied. */
     function setLive(id, live) {
         if (!liveColumn) {
             return Promise.reject(new Error(
@@ -191,9 +227,10 @@ var Api = (function () {
     /* Upserts on the (project, name) unique index, so saving the same name
      * twice updates in place rather than piling up duplicates.
      *
-     * `is_live` is intentionally absent: merge-duplicates only assigns the
-     * columns present in the body, so editing a live template leaves it live,
-     * and only setLive() ever moves that flag. */
+     * `status` and `is_live` are intentionally absent: merge-duplicates only
+     * assigns the columns present in the body, so editing a template preserves
+     * its workflow state. Only setStatus() — or legacy setLive() before the
+     * migration — changes it. */
     function saveTemplate(t) {
         return authed(function () {
             return fetch(SUPABASE.url + '/rest/v1/email_templates?on_conflict=project,name', {
@@ -407,6 +444,8 @@ var Api = (function () {
         getTemplate: getTemplate,
         saveTemplate: saveTemplate,
         deleteTemplate: deleteTemplate,
+        setStatus: setStatus,
+        hasStatusColumn: hasStatusColumn,
         setLive: setLive,
         hasLiveColumn: hasLiveColumn,
         listBrands: listBrands,
