@@ -169,11 +169,12 @@ var BLOCKS = [
     opts: {
         text: { label: 'Text', type: 'textarea', default: '{{body_text}}' },
         size: { label: 'Size', type: 'select', choices: ['body', 'lead', 'small'], default: 'body' },
+        align: { label: 'Alignment', type: 'select', choices: ['left', 'center'], default: 'left' },
         muted: { label: 'Muted', type: 'bool', default: false }
     },
     render: function (t, o) {
         return '' +
-'<tr><td class="px" style="' + pad(t, 20) + '">' +
+'<tr><td class="px" align="' + o.align + '" style="' + pad(t, 20) + '">' +
     copyParas(o.text, '{{body_text}}', font(t, o.size, o.muted ? t.textMuted : t.text)) +
 '</td></tr>';
     }
@@ -515,6 +516,7 @@ var BLOCKS = [
         closing: { label: 'Closing', type: 'text', default: 'Thanks' },
         name: { label: 'Sender name', type: 'text', default: '{{sender_name}}' },
         title: { label: 'Sender title', type: 'text', default: '{{sender_title}}' },
+        align: { label: 'Alignment', type: 'select', choices: ['left', 'center'], default: 'left' },
         sig: { label: 'Signature', type: 'image', default: '' },
         sigWidth: { label: 'Signature width', type: 'select', choices: ['120', '160', '200', '240'], default: '160' },
         showStamp: { label: 'Project stamp', type: 'bool', default: false },
@@ -533,7 +535,7 @@ var BLOCKS = [
         var sigUrl = assetUrl(o.sig, '');
         var sigW = parseInt(o.sigWidth, 10) || 160;
         var mark = sigUrl
-            ? '<img src="' + sigUrl + '" width="' + sigW + '" alt="Signature" style="display:block;border:0;outline:none;text-decoration:none;width:' + sigW + 'px;max-width:100%;height:auto;margin:10px 0 4px 0;">'
+            ? '<img src="' + sigUrl + '" width="' + sigW + '" alt="Signature" style="display:block;border:0;outline:none;text-decoration:none;width:' + sigW + 'px;max-width:100%;height:auto;margin:10px ' + (o.align === 'center' ? 'auto' : '0') + ' 4px ' + (o.align === 'center' ? 'auto' : '0') + ';">'
             : '';
 
         var body =
@@ -543,7 +545,7 @@ var BLOCKS = [
 
         var stampUrl = o.showStamp ? (t.stampUrl || '') : '';
         if (!stampUrl) {
-            return '<tr><td class="px" style="' + pad(t, 32) + '">' + body + '</td></tr>';
+            return '<tr><td class="px" align="' + o.align + '" style="' + pad(t, 32) + '">' + body + '</td></tr>';
         }
 
         /* Two cells so the seal sits to the right of the sign-off, baselines
@@ -553,7 +555,7 @@ var BLOCKS = [
         return '' +
 '<tr><td class="px" style="' + pad(t, 32) + '">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' +
-        '<td class="stack" valign="bottom" style="padding:0;">' + body + '</td>' +
+        '<td class="stack" align="' + o.align + '" valign="bottom" style="padding:0;">' + body + '</td>' +
         '<td class="stack" width="' + stW + '" align="right" valign="bottom" style="padding:0 0 0 20px;">' +
             '<img src="' + stampUrl + '" width="' + stW + '" alt="Official stamp" style="display:block;border:0;outline:none;text-decoration:none;width:' + stW + 'px;max-width:100%;height:auto;">' +
         '</td>' +
