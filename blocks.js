@@ -759,7 +759,9 @@ function renderDocument(t, blocksHtml) {
 '    .card { border-radius:0 !important; }\n' +
 '    .px { padding-left:24px !important; padding-right:24px !important; }\n' +
 '    .stack { display:block !important; width:100% !important; padding:0 0 20px 0 !important; }\n' +
-'    .gutter { padding-left:0 !important; padding-right:0 !important; }\n' +
+'    /* On a phone the card goes full-bleed, including its top and bottom, so\n' +
+'     * the grey desktop canvas cannot peek through before the first section. */\n' +
+'    .gutter { padding:0 !important; }\n' +
 '  }\n' +
 '</style>\n' +
 '</head>\n' +
