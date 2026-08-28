@@ -154,6 +154,23 @@ function fontStack(key) {
     return (FONT_STACKS[key] || FONT_STACKS[DEFAULT_FONT]).stack;
 }
 
+/* The same stack, with the tokens Outlook cannot read taken out.
+ *
+ * Outlook on Windows renders through the Word engine, which chokes on a
+ * hyphen-led family name like -apple-system: it discards the whole declaration
+ * and falls back to Times New Roman. Since `system` is the default on every
+ * project, that put a serif in most of these emails on the single client least
+ * able to cope. Dropping those tokens leaves a list Word does understand, and
+ * every stack in FONT_STACKS still ends in a generic family. */
+function msoFontStack(stack) {
+    var kept = String(stack).split(',').map(function (part) {
+        return part.trim();
+    }).filter(function (part) {
+        return part && part.charAt(0) !== '-' && part !== 'BlinkMacSystemFont';
+    });
+    return kept.length ? kept.join(', ') : 'Arial, Helvetica, sans-serif';
+}
+
 var LAYOUT = {
     width: 600,
     radius: 16,       /* the card */
@@ -194,6 +211,9 @@ function makeTheme(key) {
         brandName: src.brandName,
         logoUrl: src.logoUrl,
         logoWidth: src.logoWidth,
+        /* One project website, available to footer blocks that need a stable
+         * organisation link rather than a per-recipient merge field. */
+        websiteUrl: src.websiteUrl || '',
         /* The official stamp or seal, like the logo: one asset per organisation,
          * not something re-uploaded on every letter that needs it. */
         stampUrl: src.stampUrl || '',
@@ -215,13 +235,19 @@ function makeTheme(key) {
     if (ov) {
         if (ov.brand_name) t.brandName = ov.brand_name;
         if (ov.logo_url != null) t.logoUrl = ov.logo_url;
+        if (ov.website_url != null) t.websiteUrl = ov.website_url;
         if (ov.stamp_url != null) t.stampUrl = ov.stamp_url;
+        if (ov.display_name != null && String(ov.display_name).trim()) {
+            t.label = String(ov.display_name).trim();
+        }
         if (ov.logo_width) t.logoWidth = ov.logo_width;
         if (ov.font) t.fontKey = ov.font;
         /* A project created in the app has no THEMES entry to take a label from,
-         * so it borrows its own name. Without this every added project would be
-         * labelled "eGovern", the fallback theme it was cloned from. */
-        if (!THEMES[key]) t.label = ov.brand_name || key;
+         * so it falls back to its saved display name, then its organisation name,
+         * then its stable key. */
+        if (!THEMES[key] && !(ov.display_name && String(ov.display_name).trim())) {
+            t.label = ov.brand_name || key;
+        }
         for (var k in (ov.colors || {})) {
             if (Object.prototype.hasOwnProperty.call(ov.colors, k)) t[k] = ov.colors[k];
         }
@@ -274,6 +300,10 @@ function font(t, styleName, color, extra) {
     return 'font-family:' + t.font + ';' +
            'font-size:' + s.size + ';' +
            'line-height:' + s.line + ';' +
+           /* Outlook on Windows treats line-height as a minimum, not a value, so
+            * every paragraph and heading arrives with inflated leading unless it
+            * is told to take the number exactly. */
+           'mso-line-height-rule:exactly;' +
            'font-weight:' + s.weight + ';' +
            (s.track !== '0' ? 'letter-spacing:' + s.track + ';' : '') +
            'color:' + color + ';' +
@@ -331,6 +361,11 @@ function footerMark(t, width, align) {
     return '<img src="' + t.logoUrl + '" width="' + w + '" alt="' + esc(t.brandName) + '"' +
         ' style="display:block;border:0;outline:none;text-decoration:none;width:' + w +
         'px;max-width:100%;height:auto;' + (align === 'center' ? 'margin:0 auto;' : '') + '">';
+}
+
+function footerWebsiteUrl(t) {
+    var url = String(t.websiteUrl || '').trim();
+    return /^https?:\/\/[^\s<>"']+$/i.test(url) ? esc(url) : '{{help_url}}';
 }
 
 /* ------------------------------------------------------- uploaded assets */

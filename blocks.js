@@ -135,9 +135,9 @@ var BLOCKS = [
         var img = '<img src="' + src + '" width="' + w + '" height="' + h + '" alt="' + copy(o.alt, '{{hero_image_alt}}') + '" style="display:block;border:0;outline:none;text-decoration:none;width:100%;max-width:' + w + 'px;height:' + h + 'px;object-fit:cover;' + radius + '">';
 
         if (o.bleed) {
-            return '<tr><td style="padding:' + (atTop ? '0' : '32px 0 0 0') + ';font-size:0;line-height:0;">' + img + '</td></tr>';
+            return '<tr><td style="padding:' + (atTop ? '0' : '32px 0 0 0') + ';font-size:0;line-height:0;mso-line-height-rule:exactly;">' + img + '</td></tr>';
         }
-        return '<tr><td class="px" style="' + pad(t, 32) + 'font-size:0;line-height:0;">' + img + '</td></tr>';
+        return '<tr><td class="px" style="' + pad(t, 32) + 'font-size:0;line-height:0;mso-line-height-rule:exactly;">' + img + '</td></tr>';
     }
 },
 {
@@ -185,7 +185,7 @@ var BLOCKS = [
     group: 'Buttons & links',
     icon: 'button',
     keywords: 'cta call to action link primary copy label',
-    desc: 'Table-based so Outlook honours the padding. One per email, ideally.',
+    desc: 'Padding sits on the cell, so Outlook gives it a real button shape. One per email, ideally.',
     opts: {
         label: { label: 'Button text', type: 'text', default: '{{cta_label}}' },
         url: { label: 'Link', type: 'text', default: '{{cta_url}}' },
@@ -202,9 +202,13 @@ var BLOCKS = [
         var r = o.pill ? 100 : t.radiusBtn;
         return '' +
 '<tr><td class="px" align="' + o.align + '" style="' + pad(t, 28) + '">' +
-    '<table role="presentation" cellpadding="0" cellspacing="0" border="0"' + (o.full ? ' width="100%"' : '') + '>' +
-        '<tr><td align="center" bgcolor="' + bg + '" style="border-radius:' + r + 'px;border:1px solid ' + bd + ';">' +
-            '<a href="' + copy(o.url, '{{cta_url}}') + '" style="' + (o.full ? 'display:block;' : 'display:inline-block;') + 'padding:15px 30px;font-family:' + t.font + ';font-size:16px;line-height:20px;font-weight:600;color:' + fg + ';text-decoration:none;border-radius:' + r + 'px;">' + copy(o.label, '{{cta_label}}') + '</a>' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0"' + (o.full ? ' width="100%"' : '') + ' style="mso-table-lspace:0pt;mso-table-rspace:0pt;">' +
+        /* The padding belongs to the cell, not to the <a>. Outlook on Windows has
+         * no inline-block, so vertical padding on the anchor collapses there and
+         * the button arrives as tightly-wrapped coloured text. On the cell every
+         * client agrees, and the anchor is left carrying only type and colour. */
+        '<tr><td align="center" bgcolor="' + bg + '" style="padding:15px 30px;border-radius:' + r + 'px;border:1px solid ' + bd + ';">' +
+            '<a href="' + copy(o.url, '{{cta_url}}') + '" style="' + (o.full ? 'display:block;' : 'display:inline-block;') + 'font-family:' + t.font + ';font-size:16px;line-height:20px;mso-line-height-rule:exactly;font-weight:600;color:' + fg + ';text-decoration:none;">' + copy(o.label, '{{cta_label}}') + '</a>' +
         '</td></tr>' +
     '</table>' +
 '</td></tr>';
@@ -324,7 +328,7 @@ var BLOCKS = [
 '<tr>' +
     '<td width="' + box + '" valign="top" style="padding:0 16px 20px 0;">' +
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
-            '<td align="center" width="' + box + '" height="' + box + '" bgcolor="' + t.brandSoft + '" style="width:' + box + 'px;height:' + box + 'px;border-radius:' + radius + 'px;font-family:' + t.font + ';font-size:17px;font-weight:700;line-height:' + box + 'px;color:' + t.brand + ';">' + i + '</td>' +
+            '<td align="center" width="' + box + '" height="' + box + '" bgcolor="' + t.brandSoft + '" style="width:' + box + 'px;height:' + box + 'px;border-radius:' + radius + 'px;font-family:' + t.font + ';font-size:17px;font-weight:700;line-height:' + box + 'px;mso-line-height-rule:exactly;color:' + t.brand + ';">' + i + '</td>' +
         '</tr></table>' +
     '</td>' +
     '<td valign="top" style="padding:5px 0 20px 0;' + font(t, 'small', t.text) + '">' +
@@ -377,9 +381,9 @@ var BLOCKS = [
         /* A solid pill, not a text link. On a decision letter the download IS
          * the point of the email, and a 14px underlined word next to a filename
          * loses to the CTA further up the page. */
-        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr>' +
-            '<td align="center" bgcolor="' + t.brand + '" style="border-radius:' + btnRadius + 'px;">' +
-                '<a href="' + url + '" style="display:inline-block;padding:10px 20px;font-family:' + t.font + ';font-size:14px;line-height:18px;font-weight:600;color:' + t.brandText + ';text-decoration:none;white-space:nowrap;border-radius:' + btnRadius + 'px;">' + copy(o.buttonLabel, 'Download') + '</a>' +
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" style="mso-table-lspace:0pt;mso-table-rspace:0pt;"><tr>' +
+            '<td align="center" bgcolor="' + t.brand + '" style="padding:10px 20px;border-radius:' + btnRadius + 'px;">' +
+                '<a href="' + url + '" style="display:inline-block;font-family:' + t.font + ';font-size:14px;line-height:18px;mso-line-height-rule:exactly;font-weight:600;color:' + t.brandText + ';text-decoration:none;white-space:nowrap;">' + copy(o.buttonLabel, 'Download') + '</a>' +
             '</td>' +
         '</tr></table>' +
     '</td>' +
@@ -577,7 +581,7 @@ var BLOCKS = [
         space: { label: 'Space above', type: 'select', choices: ['16', '24', '32', '40'], default: '32' }
     },
     render: function (t, o) {
-        var rule = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px;font-size:0;line-height:0;background-color:' + t.hairline + ';">&nbsp;</td></tr></table>';
+        var rule = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px;font-size:0;line-height:0;mso-line-height-rule:exactly;background-color:' + t.hairline + ';">&nbsp;</td></tr></table>';
         return o.bleed
             ? '<tr><td style="padding:' + o.space + 'px 0 0 0;">' + rule + '</td></tr>'
             : '<tr><td class="px" style="padding:' + o.space + 'px ' + t.pad + 'px 0 ' + t.pad + 'px;">' + rule + '</td></tr>';
@@ -594,7 +598,7 @@ var BLOCKS = [
         height: { label: 'Height', type: 'select', choices: ['8', '16', '24', '32', '48'], default: '24' }
     },
     render: function (t, o) {
-        return '<tr><td style="font-size:0;line-height:0;height:' + o.height + 'px;">&nbsp;</td></tr>';
+        return '<tr><td style="font-size:0;line-height:0;mso-line-height-rule:exactly;height:' + o.height + 'px;">&nbsp;</td></tr>';
     }
 },
 
@@ -616,23 +620,31 @@ var BLOCKS = [
             label: 'Notice', type: 'textarea',
             default: 'This is an automated message about your account. Replies to this address are not monitored.'
         },
-        showHelp: { label: 'Help link', type: 'bool', default: true }
+        showHelp: { label: 'Help link', type: 'bool', default: true },
+        helpDestination: {
+            label: 'Help link destination', type: 'select',
+            choices: ['Help Centre', 'Project website'], default: 'Help Centre',
+            showIf: function (o) { return !!o.showHelp; }
+        }
     },
     render: function (t, o) {
         var addr = o.showAddress
             ? '<p style="margin:8px 0 0 0;' + font(t, 'micro', t.textMuted) + '">{{org_address}}</p>'
             : '';
+        var helpUrl = o.helpDestination === 'Project website'
+            ? footerWebsiteUrl(t) : '{{help_url}}';
+        var helpLabel = helpUrl === '{{help_url}}' ? 'Help Centre' : 'Website';
         var help = o.showHelp
             ? '<p style="margin:12px 0 0 0;' + font(t, 'micro', t.textMuted) + '">' +
-              '<a href="{{help_url}}" style="color:' + t.textMuted + ';text-decoration:underline;">Help Centre</a>' +
-              ' &nbsp;·&nbsp; <a href="{{privacy_url}}" style="color:' + t.textMuted + ';text-decoration:underline;">Privacy</a></p>'
+              '<a href="' + helpUrl + '" style="color:' + t.textMuted + ';text-decoration:underline;">' +
+              helpLabel + '</a></p>'
             : '';
         var logo = o.showLogo
             ? '<div style="padding:24px 0 0 0;">' + footerMark(t, o.logoWidth, 'left') + '</div>'
             : '';
         return '' +
 '<tr><td class="px" style="' + pad(t, 40, 40) + '">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px;font-size:0;line-height:0;background-color:' + t.hairline + ';">&nbsp;</td></tr></table>' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px;font-size:0;line-height:0;mso-line-height-rule:exactly;background-color:' + t.hairline + ';">&nbsp;</td></tr></table>' +
     logo +
     '<p style="margin:' + (logo ? '14px' : '24px') + ' 0 0 0;' + font(t, 'small', t.text, 'font-weight:600;') + '">{{org_name}}</p>' +
     addr +
@@ -685,8 +697,8 @@ var BLOCKS = [
             : '';
         return '' +
 '<tr><td class="px" align="center" style="' + pad(t, 40, 40) + '">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px;font-size:0;line-height:0;background-color:' + t.hairline + ';">&nbsp;</td></tr></table>' +
-    '<div style="height:24px;font-size:0;line-height:0;">&nbsp;</div>' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px;font-size:0;line-height:0;mso-line-height-rule:exactly;background-color:' + t.hairline + ';">&nbsp;</td></tr></table>' +
+    '<div style="height:24px;font-size:0;line-height:0;mso-line-height-rule:exactly;">&nbsp;</div>' +
     logo +
     social +
     '<p style="margin:0;' + font(t, 'small', t.text, 'font-weight:600;') + '">{{org_name}}</p>' +
@@ -732,11 +744,20 @@ var BLOCKS = [
  * The <style> block is progressive enhancement only — every client that drops
  * it still gets a correct 600px layout from the table attributes. */
 function renderDocument(t, blocksHtml) {
+    /* Trails the preheader so the inbox preview line stops where the preheader
+     * does. Without it every client pulls the first words of the email in after
+     * it — usually the logo's alt text and then the headline again. These are
+     * zero-width and non-breaking characters, so nothing is visible either in
+     * the preview or in the body. */
+    var previewPad = new Array(15).join('&#847;&zwnj;&nbsp;');
     return '' +
 '<!DOCTYPE html>\n' +
 '<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">\n' +
 '<head>\n' +
 '<meta charset="utf-8">\n' +
+/* The http-equiv twin is for the older clients that never learned to read the
+ * short form — Lotus Notes and a handful of legacy webmail engines. */
+'<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">\n' +
 '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
 '<meta name="x-apple-disable-message-reformatting">\n' +
 '<meta name="color-scheme" content="light">\n' +
@@ -745,13 +766,26 @@ function renderDocument(t, blocksHtml) {
 '<!--[if mso]>\n' +
 '<noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>\n' +
 '<![endif]-->\n' +
+/* Outlook only. It cannot parse the hyphen-led family names in the system stack
+ * and would otherwise fall back to Times New Roman, so it is handed the same
+ * stack with those tokens removed. !important because it has to beat the inline
+ * font-family on every element. */
+'<!--[if mso]>\n' +
 '<style>\n' +
-'  body { margin:0; padding:0; width:100% !important; -webkit-text-size-adjust:100%; }\n' +
+'  body, table, td, div, p, a, span, h1, h2, h3, li\n' +
+'    { font-family:' + msoFontStack(t.font) + ' !important; }\n' +
+'</style>\n' +
+'<![endif]-->\n' +
+'<style>\n' +
+'  :root { color-scheme:light; supported-color-schemes:light; }\n' +
+'  body { margin:0; padding:0; width:100% !important; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }\n' +
 '  /* separate, not collapse. In the collapsed border model border-radius is a\n' +
 '     no-op, which is what drew a square stroke around every rounded button and\n' +
 '     squared off the tinted panels. border-spacing:0 keeps the layout tight,\n' +
-'     and cellspacing="0" on every table means Outlook never sees a gap. */\n' +
-'  table { border-collapse:separate; border-spacing:0; }\n' +
+'     and cellspacing="0" on every table means Outlook never sees a gap.\n' +
+'     mso-table-*space kills the ~1.5pt gutter Word puts either side of a table,\n' +
+'     which is what knocked nested tables a couple of pixels out of line. */\n' +
+'  table { border-collapse:separate; border-spacing:0; mso-table-lspace:0pt; mso-table-rspace:0pt; }\n' +
 '  img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }\n' +
 '  a { text-decoration:none; }\n' +
 '  @media only screen and (max-width:620px) {\n' +
@@ -765,13 +799,16 @@ function renderDocument(t, blocksHtml) {
 '  }\n' +
 '</style>\n' +
 '</head>\n' +
-'<body style="margin:0;padding:0;background-color:' + t.pageBg + ';">\n' +
-'<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">{{preheader}}</div>\n' +
-'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:' + t.pageBg + ';">\n' +
+/* bgcolor as well as the inline style throughout: Outlook ignores a background
+ * on <body> outright, and the older webmail engines and Lotus Notes trust the
+ * attribute over the declaration. Belt and braces, and free. */
+'<body style="margin:0;padding:0;background-color:' + t.pageBg + ';" bgcolor="' + t.pageBg + '">\n' +
+'<div style="display:none;font-size:1px;line-height:1px;mso-line-height-rule:exactly;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">{{preheader}}' + previewPad + '</div>\n' +
+'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="' + t.pageBg + '" style="background-color:' + t.pageBg + ';mso-table-lspace:0pt;mso-table-rspace:0pt;">\n' +
 '<tr><td class="gutter" align="center" style="padding:32px 16px;">\n' +
-'  <table role="presentation" class="wrap" width="' + t.width + '" cellpadding="0" cellspacing="0" border="0" style="width:' + t.width + 'px;max-width:' + t.width + 'px;">\n' +
+'  <table role="presentation" class="wrap" width="' + t.width + '" cellpadding="0" cellspacing="0" border="0" style="width:' + t.width + 'px;max-width:' + t.width + 'px;mso-table-lspace:0pt;mso-table-rspace:0pt;">\n' +
 '    <tr><td>\n' +
-'      <table role="presentation" class="card" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:' + t.cardBg + ';border-radius:' + t.radius + 'px;overflow:hidden;">\n' +
+'      <table role="presentation" class="card" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="' + t.cardBg + '" style="background-color:' + t.cardBg + ';border-radius:' + t.radius + 'px;overflow:hidden;mso-table-lspace:0pt;mso-table-rspace:0pt;">\n' +
 blocksHtml +
 '      </table>\n' +
 '    </td></tr>\n' +

@@ -250,7 +250,7 @@
         flex: 1; min-width: 0; max-width: none; font-family: var(--mono);
         font-size: 12.5px; padding: 6px 8px;
     }
-    input.hex.bad { border-color: #b91c1c; }
+    input.hex.bad, input.urlbad { border-color: #b91c1c; }
     .prevbox {
         width: 380px; flex-shrink: 0; border: 1px solid var(--line);
         border-radius: 12px; overflow: hidden; background: var(--panel);
@@ -566,8 +566,12 @@
             <h5>Identity</h5>
             <div class="fields">
                 <div class="row">
-                    <label for="bName">Name</label>
-                    <input type="text" id="bName" placeholder="Organisation name">
+                    <label for="bProjectName">Project name</label>
+                    <input type="text" id="bProjectName" placeholder="Name shown in the app">
+                </div>
+                <div class="row">
+                    <label for="bName">Organisation name</label>
+                    <input type="text" id="bName" placeholder="Name used in the email">
                 </div>
                 <div class="row">
                     <label for="bLogo">Logo URL</label>
@@ -584,6 +588,17 @@
                     <input type="number" id="bLogoW" min="60" max="280" step="10" style="max-width:84px">
                     <span style="font-size:12px;color:var(--muted)">px</span>
                 </div>
+            </div>
+            <h5>Website</h5>
+            <div class="fields">
+                <div class="row">
+                    <label for="bWebsite">Website URL</label>
+                    <input type="url" id="bWebsite" placeholder="https://…" autocomplete="url">
+                </div>
+                <p class="fnote" style="margin-bottom:26px">
+                    Used when a footer is configured to link to the project website.
+                    Leave blank to keep using the Help Centre merge field.
+                </p>
             </div>
             <h5>Typeface</h5>
             <div class="fields">
@@ -1557,7 +1572,8 @@ function openBrand(key) {
     brandKey = key;
     var t = makeTheme(key);
     brandDraft = {
-        key: key, brand_name: t.brandName, logo_url: t.logoUrl || '',
+        key: key, display_name: t.label, brand_name: t.brandName, logo_url: t.logoUrl || '',
+        website_url: t.websiteUrl || '',
         stamp_url: t.stampUrl || '',
         logo_width: t.logoWidth, font: t.fontKey, colors: {}, social: {}
     };
@@ -1572,8 +1588,11 @@ function openBrand(key) {
     });
 
     document.getElementById('brandTitle').textContent = t.label;
+    document.getElementById('bProjectName').value = brandDraft.display_name;
     document.getElementById('bName').value = brandDraft.brand_name;
     document.getElementById('bLogo').value = brandDraft.logo_url;
+    document.getElementById('bWebsite').value = brandDraft.website_url;
+    document.getElementById('bWebsite').classList.remove('urlbad');
     document.getElementById('bStamp').value = brandDraft.stamp_url;
     document.getElementById('bLogoW').value = brandDraft.logo_width;
     document.getElementById('btnBrandReset').textContent =
@@ -1716,6 +1735,10 @@ document.getElementById('bSwatches').addEventListener('change', function (e) {
     f.classList.remove('bad');
 });
 
+document.getElementById('bProjectName').addEventListener('input', function (e) {
+    brandDraft.display_name = e.target.value.trim();
+    document.getElementById('brandTitle').textContent = brandDraft.display_name || makeTheme(brandKey).label;
+});
 document.getElementById('bName').addEventListener('input', function (e) {
     brandDraft.brand_name = e.target.value;
     renderFontSpecimen();
@@ -1728,6 +1751,19 @@ document.getElementById('bFont').addEventListener('change', function (e) {
 });
 document.getElementById('bLogo').addEventListener('input', function (e) {
     brandDraft.logo_url = e.target.value.trim(); renderBrandPreview();
+});
+function validWebsiteUrl(value) {
+    var s = String(value || '').trim();
+    if (!s) return true;
+    try {
+        var u = new URL(s);
+        return (u.protocol === 'https:' || u.protocol === 'http:') && !!u.hostname;
+    } catch (e) { return false; }
+}
+document.getElementById('bWebsite').addEventListener('input', function (e) {
+    brandDraft.website_url = e.target.value.trim();
+    e.target.classList.toggle('urlbad', !validWebsiteUrl(e.target.value));
+    renderBrandPreview();
 });
 document.getElementById('bStamp').addEventListener('input', function (e) {
     brandDraft.stamp_url = e.target.value.trim(); renderBrandPreview();
@@ -1769,7 +1805,7 @@ document.getElementById('projectForm').addEventListener('submit', function (e) {
     var base = makeTheme('egovern');
     err.textContent = '';
     Api.saveBrand({
-        key: key, brand_name: name, logo_url: '', stamp_url: '',
+        key: key, display_name: name, brand_name: name, logo_url: '', website_url: '', stamp_url: '',
         logo_width: base.logoWidth, font: base.fontKey, colors: {}, social: {}
     }).then(loadBrands).then(function () {
         document.getElementById('projectDlg').close();
@@ -1779,6 +1815,17 @@ document.getElementById('projectForm').addEventListener('submit', function (e) {
 });
 
 document.getElementById('btnBrandSave').addEventListener('click', function () {
+    if (!String(brandDraft.display_name || '').trim()) {
+        document.getElementById('bProjectName').focus();
+        toast('Project name cannot be blank', 'err');
+        return;
+    }
+    if (!validWebsiteUrl(brandDraft.website_url)) {
+        document.getElementById('bWebsite').classList.add('urlbad');
+        document.getElementById('bWebsite').focus();
+        toast('Website URL must start with http:// or https://', 'err');
+        return;
+    }
     var btn = this;
     btn.disabled = true; btn.textContent = 'Saving…';
     Api.saveBrand(brandDraft).then(function () {

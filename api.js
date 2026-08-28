@@ -281,8 +281,10 @@ var Api = (function () {
                 }),
                 body: JSON.stringify({
                     key: b.key,
+                    display_name: b.display_name || null,
                     brand_name: b.brand_name || null,
                     logo_url: b.logo_url || null,
+                    website_url: b.website_url || null,
                     stamp_url: b.stamp_url || null,
                     logo_width: b.logo_width || null,
                     font: b.font || null,

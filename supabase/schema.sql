@@ -93,10 +93,12 @@ create policy "Signed-in users can delete templates"
 -- and every template in that project picks the change up.
 
 create table if not exists project_brands (
-    key         text primary key,          -- 'nursing' | 'onegov' | 'smartfinance' | 'egovern'
-    brand_name  text,
+    key         text primary key,          -- stable slug used by templates and URLs
+    display_name text,                      -- editable name shown in the app
+    brand_name  text,                       -- organisation name used in email copy
     logo_url    text,
     logo_width  integer,
+    website_url text,                      -- project website used by footer links
     font        text,                      -- a key from FONT_STACKS in theme.js; null = shipped default
     colors      jsonb not null default '{}'::jsonb,
     social      jsonb not null default '{}'::jsonb,  -- { facebook: url, instagram: url, ... }
@@ -105,10 +107,12 @@ create table if not exists project_brands (
 );
 
 -- `create table if not exists` skips an existing table entirely, so a project
--- created before per-project fonts, social links or the stamp needs the columns
--- adding on their own.
+-- created before per-project display names, fonts, social links, website or the stamp
+-- needs the columns adding on their own.
+alter table project_brands add column if not exists display_name text;
 alter table project_brands add column if not exists font text;
 alter table project_brands add column if not exists social jsonb not null default '{}'::jsonb;
+alter table project_brands add column if not exists website_url text;
 alter table project_brands add column if not exists stamp_url text;
 
 -- A row here is also how a project comes into existence. The four shipped ones
