@@ -57,12 +57,30 @@ var BLOCKS = [
     },
     render: function (t, o) {
         var scale = { small: 0.72, medium: 1, large: 1.3 }[o.size] || 1;
-        var w = Math.round((t.logoWidth || 140) * scale);
-        /* An upload here overrides the project logo, for the one-off email that
-         * carries a department mark or a campaign lockup. */
-        var src = assetUrl(o.logo, '') || t.logoUrl;
-        var mark = src
-            ? '<img src="' + src + '" width="' + w + '" alt="' + esc(t.brandName) + '" style="display:block;border:0;outline:none;text-decoration:none;height:auto;width:' + w + 'px;max-width:100%;' + (o.align === 'center' ? 'margin:0 auto;' : '') + '">'
+        /* An upload here overrides the project or organisation logo, for the
+         * one-off email carrying a department mark or a campaign lockup. Its
+         * shape is unknown, so it falls back to width sizing. */
+        var own = assetUrl(o.logo, '');
+        if (own) {
+            var ow = Math.round((t.logoWidth || 140) * scale);
+            return '<tr><td class="px" align="' + o.align + '" style="' + pad(t, 40) + '">' +
+                '<img src="' + own + '" width="' + ow + '" alt="' + esc(t.brandName) + '"' +
+                ' style="display:block;border:0;outline:none;text-decoration:none;height:auto;width:' +
+                ow + 'px;max-width:100%;' + (o.align === 'center' ? 'margin:0 auto;' : '') + '">' +
+            '</td></tr>';
+        }
+        /* Gated on there being a logo at all, portable or not: a resolved theme
+         * always has a real organisation behind it, so this correctly falls back
+         * to the wordmark for a project where nobody has uploaded one. */
+        var mark = t.logoUrl
+            ? logoImg(t, {
+                  /* The height set on the organisation, or the project, scaled by
+                   * this email's choice. 40px is the fallback for a measured logo
+                   * that has never had a height chosen for it. */
+                  height: Math.round((t.logoHeight || 40) * scale),
+                  width: Math.round((t.logoWidth || 140) * scale),
+                  align: o.align
+              })
             : '<span style="' + font(t, 'heading', t.text, 'letter-spacing:-0.2px;') + '">' + esc(t.brandName) + '</span>';
         return '' +
 '<tr><td class="px" align="' + o.align + '" style="' + pad(t, 40) + '">' + mark + '</td></tr>';
@@ -547,7 +565,10 @@ var BLOCKS = [
             '<p style="margin:' + (mark ? '0' : '2px') + ' 0 0 0;' + font(t, 'body', t.text, 'font-weight:600;') + '">' + copy(o.name, '{{sender_name}}') + '</p>' +
             '<p style="margin:0;' + font(t, 'small', t.textMuted) + '">' + copy(o.title, '{{sender_title}}') + '</p>';
 
-        var stampUrl = o.showStamp ? (t.stampUrl || '') : '';
+        /* Portable, the seal is the organisation's, so it becomes a merge field
+         * like the logo — one template, each school's own stamp. */
+        var stampUrl = !o.showStamp ? ''
+            : (t.portable ? '{{' + ORG_FIELDS.stamp + '}}' : (t.stampUrl || ''));
         if (!stampUrl) {
             return '<tr><td class="px" align="' + o.align + '" style="' + pad(t, 32) + '">' + body + '</td></tr>';
         }
@@ -613,8 +634,22 @@ var BLOCKS = [
     opts: {
         showLogo: { label: 'Brand logo', type: 'bool', default: true },
         /* Footer scale, not header scale. A footer mark is there to reassure, not
-         * to announce — the logo at the top of the card already did that. */
-        logoWidth: { label: 'Logo width', type: 'select', choices: ['32', '44', '56', '70'], default: '44', showIf: function (o) { return !!o.showLogo; } },
+         * to announce — the logo at the top of the card already did that.
+         *
+         * Two controls for one job, and only ever one of them on screen. A logo
+         * whose shape has been measured is sized by height, so every shape sits
+         * at the same visual weight. One that has not can only be sized by width,
+         * which is what this always did. */
+        logoHeight: {
+            label: 'Logo height', type: 'select',
+            choices: ['14', '18', '22', '28', '36'], default: '18',
+            showIf: function (o, t) { return !!o.showLogo && logoMeasured(t); }
+        },
+        logoWidth: {
+            label: 'Logo width', type: 'select',
+            choices: ['32', '44', '56', '70'], default: '44',
+            showIf: function (o, t) { return !!o.showLogo && !logoMeasured(t); }
+        },
         showAddress: { label: 'Postal address', type: 'bool', default: true },
         notice: {
             label: 'Notice', type: 'textarea',
@@ -640,7 +675,7 @@ var BLOCKS = [
               helpLabel + '</a></p>'
             : '';
         var logo = o.showLogo
-            ? '<div style="padding:24px 0 0 0;">' + footerMark(t, o.logoWidth, 'left') + '</div>'
+            ? '<div style="padding:24px 0 0 0;">' + footerMark(t, o.logoWidth, 'left', o.logoHeight) + '</div>'
             : '';
         return '' +
 '<tr><td class="px" style="' + pad(t, 40, 40) + '">' +
@@ -664,7 +699,16 @@ var BLOCKS = [
     desc: 'For newsletters and campaigns. Unsubscribe, preferences and a postal address — all legally required for bulk mail. Social links come from the project, not from this email.',
     opts: {
         showLogo: { label: 'Brand logo', type: 'bool', default: true },
-        logoWidth: { label: 'Logo width', type: 'select', choices: ['32', '44', '56', '70'], default: '44', showIf: function (o) { return !!o.showLogo; } },
+        logoHeight: {
+            label: 'Logo height', type: 'select',
+            choices: ['14', '18', '22', '28', '36'], default: '18',
+            showIf: function (o, t) { return !!o.showLogo && logoMeasured(t); }
+        },
+        logoWidth: {
+            label: 'Logo width', type: 'select',
+            choices: ['32', '44', '56', '70'], default: '44',
+            showIf: function (o, t) { return !!o.showLogo && !logoMeasured(t); }
+        },
         showSocial: { label: 'Social links', type: 'bool', default: true },
         showReason: { label: 'Why you got this', type: 'bool', default: true },
         reason: { label: 'Why-you-got-this text', type: 'textarea', default: '{{legal_note}}', showIf: function (o) { return !!o.showReason; } }
@@ -688,7 +732,7 @@ var BLOCKS = [
               links.join(' &nbsp;&nbsp; ') + '</p>'
             : '';
         var logo = o.showLogo
-            ? '<div style="padding:0 0 18px 0;">' + footerMark(t, o.logoWidth, 'center') + '</div>'
+            ? '<div style="padding:0 0 18px 0;">' + footerMark(t, o.logoWidth, 'center', o.logoHeight) + '</div>'
             : '';
         var reason = o.showReason
             ? '<div style="padding:12px 0 0 0;">' +
@@ -721,13 +765,22 @@ var BLOCKS = [
     desc: 'One quiet line. For short system mail like a verification code, where a full footer would outweigh the message.',
     opts: {
         showLogo: { label: 'Brand logo', type: 'bool', default: true },
-        logoWidth: { label: 'Logo width', type: 'select', choices: ['28', '36', '44', '56'], default: '36', showIf: function (o) { return !!o.showLogo; } }
+        logoHeight: {
+            label: 'Logo height', type: 'select',
+            choices: ['12', '16', '20', '26'], default: '16',
+            showIf: function (o, t) { return !!o.showLogo && logoMeasured(t); }
+        },
+        logoWidth: {
+            label: 'Logo width', type: 'select',
+            choices: ['28', '36', '44', '56'], default: '36',
+            showIf: function (o, t) { return !!o.showLogo && !logoMeasured(t); }
+        }
     },
     render: function (t, o) {
         /* Even here. A verification code with no mark on it is the shape of a
          * phishing email, so the logo defaults on and just goes small. */
         var logo = o.showLogo
-            ? '<div style="padding:0 0 14px 0;">' + footerMark(t, o.logoWidth, 'center') + '</div>'
+            ? '<div style="padding:0 0 14px 0;">' + footerMark(t, o.logoWidth, 'center', o.logoHeight) + '</div>'
             : '';
         return '' +
 '<tr><td class="px" align="center" style="' + pad(t, 40, 40) + '">' + logo +

@@ -6,7 +6,7 @@
 
 create table if not exists email_templates (
     id                  uuid primary key default gen_random_uuid(),
-    project             text not null,          -- 'nursing' | 'onegov' | 'smartfinance' | 'egovern'
+    project             text not null,          -- project_brands.key
     name                text not null,          -- 'Application approved'
     description         text,
     composition         jsonb not null,         -- block list + theme overrides, so it reopens in the composer
@@ -97,7 +97,13 @@ create table if not exists project_brands (
     display_name text,                      -- editable name shown in the app
     brand_name  text,                       -- organisation name used in email copy
     logo_url    text,
+    -- Three separate things. logo_height is the size you choose; logo_aspect is
+    -- the file's real shape, measured on upload, from which the width is worked
+    -- out. logo_width is the older width-only setting, still honoured for a logo
+    -- that was never measured so nothing re-sizes itself behind your back.
     logo_width  integer,
+    logo_height integer,
+    logo_aspect real,
     website_url text,                      -- project website used by footer links
     font        text,                      -- a key from FONT_STACKS in theme.js; null = shipped default
     colors      jsonb not null default '{}'::jsonb,
@@ -110,15 +116,16 @@ create table if not exists project_brands (
 -- created before per-project display names, fonts, social links, website or the stamp
 -- needs the columns adding on their own.
 alter table project_brands add column if not exists display_name text;
+alter table project_brands add column if not exists logo_height integer;
+alter table project_brands add column if not exists logo_aspect real;
 alter table project_brands add column if not exists font text;
 alter table project_brands add column if not exists social jsonb not null default '{}'::jsonb;
 alter table project_brands add column if not exists website_url text;
 alter table project_brands add column if not exists stamp_url text;
 
--- A row here is also how a project comes into existence. The four shipped ones
--- have defaults in theme.js and need no row; anything added in the app is only
--- ever a row in this table, which is why the key is free text rather than an
--- enum.
+-- A row here is how a project comes into existence. There are no projects in the
+-- code, so this table is the whole list: delete every row and the app genuinely
+-- has no projects. That is why the key is free text rather than an enum.
 
 drop trigger if exists project_brands_set_updated_at on project_brands;
 create trigger project_brands_set_updated_at
@@ -146,6 +153,85 @@ create policy "Signed-in users can update project brands"
 drop policy if exists "Signed-in users can delete project brands" on project_brands;
 create policy "Signed-in users can delete project brands"
     on project_brands for delete to authenticated
+    using (true);
+
+-- ======================================================= project organisations
+-- One project, many organisations that send the same emails under their own
+-- identity: a "Schools" project with a row here per school.
+--
+-- The split is deliberate. A project owns the templates, the palette and the
+-- typeface — the things every organisation under it shares. A row here owns only
+-- what differs: the name, the logo, the website, the social links, the stamp.
+-- Colours and fonts are absent on purpose, because they do not vary between
+-- organisations; if that ever changes it belongs on the project, not here.
+--
+-- Templates are NOT attached to an organisation. They stay on the project, and
+-- the organisation is resolved when the email is previewed or exported. That is
+-- what lets one template serve fifty schools instead of being copied fifty
+-- times, and it is why adding this table needs no change to email_templates.
+--
+-- A project with no rows here behaves exactly as it did before organisations
+-- existed: its own branding on project_brands is used directly.
+
+create table if not exists project_orgs (
+    id           uuid primary key default gen_random_uuid(),
+    project      text not null,           -- project_brands.key, or a shipped THEMES key
+    key          text not null,           -- stable slug, unique within the project
+    display_name text,                    -- name shown in the app
+    org_name     text,                    -- fills {{org_name}}, and the wordmark when there is no logo
+    org_address  text,                    -- fills {{org_address}}
+    logo_url     text,
+    -- logo_height is the size you choose. logo_aspect is the file's real shape,
+    -- measured when it is uploaded, and the width is worked out from the two.
+    -- That is what lets a square crest and a wide lockup sit at the same height
+    -- without being configured differently, and it gives Outlook both numbers
+    -- outright, which is what it wants. logo_width is the older width-only
+    -- setting, kept for a logo that predates measuring.
+    logo_width   integer,
+    logo_height  integer,
+    logo_aspect  real,
+    website_url  text,
+    stamp_url    text,
+    social       jsonb not null default '{}'::jsonb,
+    sort         integer not null default 0,
+    created_at   timestamptz not null default now(),
+    updated_at   timestamptz not null default now()
+);
+
+-- Unique per project, not globally: two projects may both have a "north" org.
+create unique index if not exists project_orgs_project_key_idx
+    on project_orgs (project, key);
+
+create index if not exists project_orgs_project_idx
+    on project_orgs (project);
+
+drop trigger if exists project_orgs_set_updated_at on project_orgs;
+create trigger project_orgs_set_updated_at
+    before update on project_orgs
+    for each row execute function set_updated_at();
+
+alter table project_orgs enable row level security;
+
+-- Read is public for the same reason project_brands is: the shared library has
+-- to render every organisation correctly with no sign-in.
+drop policy if exists "Anyone can read project orgs" on project_orgs;
+create policy "Anyone can read project orgs"
+    on project_orgs for select
+    using (true);
+
+drop policy if exists "Signed-in users can insert project orgs" on project_orgs;
+create policy "Signed-in users can insert project orgs"
+    on project_orgs for insert to authenticated
+    with check (true);
+
+drop policy if exists "Signed-in users can update project orgs" on project_orgs;
+create policy "Signed-in users can update project orgs"
+    on project_orgs for update to authenticated
+    using (true) with check (true);
+
+drop policy if exists "Signed-in users can delete project orgs" on project_orgs;
+create policy "Signed-in users can delete project orgs"
+    on project_orgs for delete to authenticated
     using (true);
 
 -- ================================================================== storage

@@ -25,66 +25,39 @@ var COLOR_ROLES = [
     { key: 'surface',   label: 'Surface',        hint: 'Neutral panels and cards-within-cards.' }
 ];
 
-var THEMES = {
-    'egovern': {
-        label: 'eGovern',
-        brandName: 'eGovern',
-        logoUrl: '',
-        logoWidth: 130,
-        font: 'system',
-        color: {
-            brand: '#222222', brandText: '#ffffff', brandSoft: '#f0f0f0',
-            pageBg: '#f7f7f7', cardBg: '#ffffff',
-            text: '#222222', textMuted: '#717171',
-            hairline: '#ebebeb', surface: '#f7f7f7'
-        }
-    },
-    'nursing': {
-        label: 'Nursing Council',
-        brandName: 'Barbados Nursing Council',
-        /* nursing/public/images/NursePortalLogo.svg — must be re-hosted at an
-         * absolute https URL before it will render in a mail client. */
-        logoUrl: '',
-        logoWidth: 150,
-        font: 'system',
-        color: {
-            /* Brand coral is #d3b0a1 — far too pale to carry white button text,
-             * so the CTA uses a deepened version of the same hue and the pale
-             * original becomes the tint. */
-            brand: '#98593e', brandText: '#ffffff', brandSoft: '#f7ece7',
-            pageBg: '#f6f5f4', cardBg: '#ffffff',
-            text: '#26211e', textMuted: '#7a716c',
-            hairline: '#ece7e4', surface: '#faf8f7'
-        }
-    },
-    'onegov': {
-        label: 'OneGov',
-        brandName: 'OneGov',
-        /* one-gov/public/transparentlogo.png */
-        logoUrl: '',
-        logoWidth: 140,
-        font: 'system',
-        color: {
-            brand: '#23395d', brandText: '#ffffff', brandSoft: '#eaeff7',
-            pageBg: '#f5f6f8', cardBg: '#ffffff',
-            text: '#1b2434', textMuted: '#6b7688',
-            hairline: '#e7eaef', surface: '#f7f8fa'
-        }
-    },
-    'smartfinance': {
-        label: 'SmartFinance',
-        brandName: 'Barbados SmartFinance',
-        logoUrl: '',
-        logoWidth: 150,
-        font: 'system',
-        color: {
-            brand: '#00267f', brandText: '#ffffff', brandSoft: '#e8ecf9',
-            pageBg: '#f5f6f9', cardBg: '#ffffff',
-            text: '#12172b', textMuted: '#6a7086',
-            hairline: '#e6e8f0', surface: '#f7f8fb'
-        }
+/* The neutral starting point, and the only branding written into the code.
+ *
+ * This is not a project. It is never listed, never has templates filed under it,
+ * and cannot be opened or edited. It exists for two jobs: it is what a brand-new
+ * project is cloned from, so a project renders correctly the moment it is created
+ * and before anyone has chosen a colour; and it is what resolves when a key is
+ * not recognised, so a template belonging to a deleted project still renders
+ * instead of throwing.
+ *
+ * Greyscale on purpose. A new project should look unbranded rather than looking
+ * like somebody else's brand. */
+var BASE_THEME = {
+    label: '',
+    brandName: '',
+    logoUrl: '',
+    logoWidth: 130,
+    font: 'system',
+    color: {
+        brand: '#222222', brandText: '#ffffff', brandSoft: '#f0f0f0',
+        pageBg: '#f7f7f7', cardBg: '#ffffff',
+        text: '#222222', textMuted: '#717171',
+        hairline: '#ebebeb', surface: '#f7f7f7'
     }
 };
+
+/* Projects shipped in the code. Deliberately none.
+ *
+ * Every project is created in the app and exists only as a project_brands row,
+ * which is what makes the list a true reflection of the database rather than a
+ * set of hardcoded names nobody can remove. The machinery that reads this is
+ * unchanged, so putting a project back in here would still work — it is empty by
+ * choice, not by omission. */
+var THEMES = {};
 
 /* ------------------------------------------------------------- typography */
 /* One scale, used everywhere. Sizes are generous — transactional mail is read
@@ -202,15 +175,82 @@ function setBrandOverrides(rows) {
     (rows || []).forEach(function (r) { BRAND_OVERRIDES[r.key] = r; });
 }
 
-/* Flatten a theme into the single object blocks receive. */
-function makeTheme(key) {
-    var src = THEMES[key] || THEMES.egovern;
+/* Organisations that send a project's emails under their own identity, loaded
+ * from project_orgs and grouped by project.
+ *
+ * A project with none behaves exactly as it did before organisations existed —
+ * that is the whole reason this is a separate table rather than a column, and
+ * why the shipped projects need no rows and no migration. */
+var PROJECT_ORGS = {};
+
+function setOrgs(rows) {
+    PROJECT_ORGS = {};
+    (rows || []).slice().sort(function (a, b) {
+        var sa = a.sort || 0, sb = b.sort || 0;
+        if (sa !== sb) return sa - sb;
+        var na = orgLabel(a), nb = orgLabel(b);
+        return na < nb ? -1 : (na > nb ? 1 : 0);
+    }).forEach(function (r) {
+        if (!r || !r.project) return;
+        if (!PROJECT_ORGS[r.project]) PROJECT_ORGS[r.project] = [];
+        PROJECT_ORGS[r.project].push(r);
+    });
+}
+
+/* What to call an organisation on screen: its display name, then the name it
+ * uses in email copy, then its stable key. */
+function orgLabel(row) {
+    if (!row) return '';
+    return String(row.display_name || row.org_name || row.key || '').trim();
+}
+
+function orgsFor(projectKey) {
+    return PROJECT_ORGS[projectKey] || [];
+}
+
+function orgByKey(projectKey, orgKey) {
+    if (!orgKey) return null;
+    var list = orgsFor(projectKey);
+    for (var i = 0; i < list.length; i++) {
+        if (list[i].key === orgKey) return list[i];
+    }
+    return null;
+}
+
+/* The organisation a project falls back to when nothing is chosen. Null for a
+ * project with none, which is what keeps single-identity projects unchanged. */
+function defaultOrg(projectKey) {
+    return orgsFor(projectKey)[0] || null;
+}
+
+/* Flatten a theme into the single object blocks receive.
+ *
+ * `orgKey` picks which organisation's identity to render under. Left out, a
+ * project that has organisations renders as its first one, because an email has
+ * to go out under a real sender — a "Schools" project is a grouping, not
+ * something that signs a letter. A project with no organisations ignores the
+ * argument entirely and resolves exactly as it always has.
+ *
+ * `label` is deliberately never touched by an organisation. It names the project
+ * in the app chrome — filters, cards, groups in the shared library — and those
+ * group templates, which belong to the project rather than to one school. */
+function makeTheme(key, orgKey) {
+    var src = THEMES[key] || BASE_THEME;
     var t = {
         key: key,
-        label: src.label,
+        /* The key is the last resort so a project can never be listed as a blank
+         * row — that would be worse than showing its slug. */
+        label: src.label || key || '',
         brandName: src.brandName,
+        orgAddress: '',
         logoUrl: src.logoUrl,
         logoWidth: src.logoWidth,
+        /* Both null until a logo has been measured. Blocks size by height when
+         * the shape is known and fall back to the width-only setting when it is
+         * not, so a logo uploaded before measuring existed still renders exactly
+         * as it did. */
+        logoHeight: null,
+        logoAspect: null,
         /* One project website, available to footer blocks that need a stable
          * organisation link rather than a per-recipient merge field. */
         websiteUrl: src.websiteUrl || '',
@@ -241,6 +281,8 @@ function makeTheme(key) {
             t.label = String(ov.display_name).trim();
         }
         if (ov.logo_width) t.logoWidth = ov.logo_width;
+        if (ov.logo_height) t.logoHeight = ov.logo_height;
+        if (ov.logo_aspect) t.logoAspect = ov.logo_aspect;
         if (ov.font) t.fontKey = ov.font;
         /* A project created in the app has no THEMES entry to take a label from,
          * so it falls back to its saved display name, then its organisation name,
@@ -258,6 +300,40 @@ function makeTheme(key) {
         }
     }
 
+    /* The organisation goes on last, over the project it belongs to. Each field
+     * is only taken when the organisation actually set it, so a school that has
+     * uploaded a logo but no stamp still gets the project's stamp rather than
+     * losing it. Colours and the typeface are absent by design: they are shared,
+     * so they stay resolved from the project above. */
+    var orgs = orgsFor(key);
+    /* `false` means "the project itself, no organisation" — what the settings
+     * screen edits and what the project cards describe. Undefined means "pick
+     * one for me", which is what rendering an email wants. */
+    var org = orgKey === false ? null
+        : (orgKey ? orgByKey(key, orgKey) : orgs[0] || null);
+    t.orgCount = orgs.length;
+    t.orgKey = org ? org.key : '';
+    t.orgLabel = org ? orgLabel(org) : '';
+    if (org) {
+        if (org.org_name) t.brandName = org.org_name;
+        if (org.org_address) t.orgAddress = org.org_address;
+        if (org.logo_url) {
+            t.logoUrl = org.logo_url;
+            /* Taken together with the logo, never separately. Carrying a shape
+             * over from the project would size this school's mark against
+             * somebody else's proportions. */
+            t.logoWidth = org.logo_width || t.logoWidth;
+            t.logoHeight = org.logo_height || null;
+            t.logoAspect = org.logo_aspect || null;
+        }
+        if (org.website_url) t.websiteUrl = org.website_url;
+        if (org.stamp_url) t.stampUrl = org.stamp_url;
+        for (var os in (org.social || {})) {
+            if (!Object.prototype.hasOwnProperty.call(org.social, os)) continue;
+            if (org.social[os]) t.social[os] = org.social[os];
+        }
+    }
+
     /* Resolved last, so it wins over the LAYOUT copy above and reflects a
      * saved override. An unknown key falls back rather than emitting an empty
      * font-family, which would leave the client to pick for us. */
@@ -265,22 +341,33 @@ function makeTheme(key) {
     return t;
 }
 
+/* The project's own identity, with no organisation applied over it.
+ *
+ * This is what the project settings screen edits and what the project cards
+ * describe. Using the organisation-aware version in those places would show one
+ * school's logo as if it belonged to the whole project — and, on the settings
+ * screen, save it there. */
+function projectTheme(key) {
+    return makeTheme(key, false);
+}
+
 /* Every project, defaults merged with whatever is saved. Drives the filter, the
  * project settings screen and the template switcher.
  *
- * The shipped four come from THEMES; anything else is a project someone added
- * in the app, which exists only as a project_brands row. Both are listed, the
- * shipped ones first, so adding a project does not reshuffle the list. */
+ * THEMES is empty, so in practice every project here is one somebody added in
+ * the app and exists only as a project_brands row. The THEMES pass is kept
+ * because it costs nothing and putting a project back into the code would work
+ * without touching this. */
 function allProjects() {
     var out = [], seen = {};
     for (var k in THEMES) {
         if (!Object.prototype.hasOwnProperty.call(THEMES, k)) continue;
         seen[k] = true;
-        out.push({ key: k, theme: makeTheme(k) });
+        out.push({ key: k, theme: projectTheme(k) });
     }
     for (var o in BRAND_OVERRIDES) {
         if (!Object.prototype.hasOwnProperty.call(BRAND_OVERRIDES, o) || seen[o]) continue;
-        out.push({ key: o, theme: makeTheme(o), custom: true });
+        out.push({ key: o, theme: projectTheme(o), custom: true });
     }
     return out;
 }
@@ -352,18 +439,106 @@ function copyParas(value, fallback, style, gap) {
  * with no mark at all reads as a leaked system email. Falls back to the brand
  * name set in type when a project has not been given a logo yet, so it is
  * never blank. */
-function footerMark(t, width, align) {
-    var w = parseInt(width, 10) || 44;
-    if (!t.logoUrl) {
-        return '<span style="' + font(t, 'small', t.text, 'font-weight:700;letter-spacing:-0.1px;') + '">' +
-            esc(t.brandName) + '</span>';
+/* Whether this logo's real shape is known, which decides whether it can be
+ * sized by height. Null for anything uploaded before measuring existed, and for
+ * a URL typed in by hand — we never fetch a pasted image to measure it. */
+function logoMeasured(t) {
+    return !!(t && t.logoUrl && t.logoAspect > 0);
+}
+
+/* The organisation's identity, as merge fields.
+ *
+ * Named in one place so the renderer, the preview filler and the handover table
+ * cannot drift apart. The first two already existed — the delivered email never
+ * carried a hardcoded organisation name — and the rest are what portable
+ * rendering adds. */
+var ORG_FIELDS = {
+    name:    'org_name',
+    address: 'org_address',
+    logo:    'org_logo_url',
+    website: 'org_website_url',
+    stamp:   'org_stamp_url'
+};
+
+/* The same theme, rendering its organisation's identity as merge fields instead
+ * of baking one organisation's values in.
+ *
+ * This is what lets a single stored template serve every school: the colours,
+ * the typeface, the layout and the copy are all fixed, and the handful of things
+ * that differ per organisation become {{ }} for the sender to fill. Everything
+ * else about rendering is untouched, so the portable document is the same email
+ * in every respect that is shared. */
+function portableTheme(t) {
+    var p = {};
+    for (var k in t) {
+        if (Object.prototype.hasOwnProperty.call(t, k)) p[k] = t[k];
     }
-    return '<img src="' + t.logoUrl + '" width="' + w + '" alt="' + esc(t.brandName) + '"' +
-        ' style="display:block;border:0;outline:none;text-decoration:none;width:' + w +
-        'px;max-width:100%;height:auto;' + (align === 'center' ? 'margin:0 auto;' : '') + '">';
+    p.portable = true;
+    return p;
+}
+
+/* One logo <img>, and the only place one is built.
+ *
+ * Height is the thing worth controlling: a mark should sit at the same height in
+ * a header whatever shape the file is. Width then falls out of the measured
+ * aspect ratio, which is also why both numbers can be stated outright — Outlook
+ * wants explicit dimensions and deals with height:auto badly, sizing the image
+ * from its intrinsic pixels instead.
+ *
+ * With no measured shape it sizes by width and leaves the height automatic,
+ * which is exactly what it did before. That is what keeps every logo uploaded
+ * before this rendering byte-for-byte identical.
+ *
+ *   spec.height  what to make it tall, used when the shape is known
+ *   spec.width   what to make it wide, used when it is not
+ */
+function logoImg(t, spec) {
+    var align = spec.align === 'center' ? 'margin:0 auto;' : '';
+    var common = 'display:block;border:0;outline:none;text-decoration:none;max-width:100%;';
+    var alt = esc(t.brandName || '');
+
+    /* Portable: the sender supplies one URL per organisation and nothing else.
+     * The height stays literal, because it is a decision this email made — a
+     * footer mark is smaller than a masthead whichever school is sending — and
+     * only the width is left to follow the picture's own proportions. Asking the
+     * sender for a width as well would mean a different number for every slot in
+     * every template, which is not a thing any sending system should have to
+     * know. */
+    if (t.portable) {
+        var ph = parseInt(spec.height, 10) || parseInt(spec.width, 10) || 40;
+        return '<img src="{{' + ORG_FIELDS.logo + '}}" height="' + ph + '"' +
+            ' alt="{{' + ORG_FIELDS.name + '}}" style="' + common +
+            'height:' + ph + 'px;width:auto;' + align + '">';
+    }
+
+    if (logoMeasured(t) && spec.height) {
+        var h = parseInt(spec.height, 10);
+        var w = Math.max(1, Math.round(h * t.logoAspect));
+        return '<img src="' + esc(t.logoUrl) + '" width="' + w + '" height="' + h + '"' +
+            ' alt="' + alt + '" style="' + common + 'width:' + w + 'px;height:' + h + 'px;' +
+            align + '">';
+    }
+
+    var fw = parseInt(spec.width, 10) || 44;
+    return '<img src="' + esc(t.logoUrl) + '" width="' + fw + '" alt="' + alt + '"' +
+        ' style="' + common + 'width:' + fw + 'px;height:auto;' + align + '">';
+}
+
+function footerMark(t, width, align, height) {
+    if (!t.logoUrl) {
+        /* The wordmark stands in for a missing logo. Portable, the name it shows
+         * has to be the merge field too, or every school would be signed off with
+         * whichever one happened to be selected when this was saved. */
+        return '<span style="' + font(t, 'small', t.text, 'font-weight:700;letter-spacing:-0.1px;') + '">' +
+            (t.portable ? '{{' + ORG_FIELDS.name + '}}' : esc(t.brandName)) + '</span>';
+    }
+    return logoImg(t, { width: width || 44, height: height, align: align });
 }
 
 function footerWebsiteUrl(t) {
+    /* Portable, the website is per organisation by definition, so it goes out as
+     * a merge field rather than one school's address. */
+    if (t.portable) return '{{' + ORG_FIELDS.website + '}}';
     var url = String(t.websiteUrl || '').trim();
     return /^https?:\/\/[^\s<>"']+$/i.test(url) ? esc(url) : '{{help_url}}';
 }

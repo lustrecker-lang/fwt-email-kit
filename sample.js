@@ -90,11 +90,24 @@ var SAMPLE = {
  * Everything else in SAMPLE is message content and stays project-neutral. */
 function sampleIdentity(theme) {
     if (!theme || !theme.brandName) return {};
-    return {
+    var out = {
         org_name: theme.brandName,
         legal_note: 'You are receiving this because you hold an account with ' +
             theme.brandName + '.'
     };
+    /* An organisation can carry its own postal address. Only when it has one —
+     * otherwise the neutral government address in SAMPLE is still the better
+     * stand-in than an empty line. */
+    if (theme.orgAddress) out.org_address = theme.orgAddress;
+
+    /* The fields a portable template leaves for the sender to fill. Supplying
+     * them here is what makes the preview show a real organisation rather than a
+     * page of handlebars, and it is why switching organisation on the shared link
+     * changes the logo as well as the name. */
+    if (theme.logoUrl) out.org_logo_url = theme.logoUrl;
+    if (theme.websiteUrl) out.org_website_url = theme.websiteUrl;
+    if (theme.stampUrl) out.org_stamp_url = theme.stampUrl;
+    return out;
 }
 
 /* Is this placeholder inside a tag, or in text the recipient reads?

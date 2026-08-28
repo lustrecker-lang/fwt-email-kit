@@ -287,6 +287,8 @@ var Api = (function () {
                     website_url: b.website_url || null,
                     stamp_url: b.stamp_url || null,
                     logo_width: b.logo_width || null,
+                    logo_height: b.logo_height || null,
+                    logo_aspect: b.logo_aspect || null,
                     font: b.font || null,
                     colors: b.colors || {},
                     social: b.social || {}
@@ -303,6 +305,67 @@ var Api = (function () {
             });
         }).then(function (r) {
             if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Reset failed'); });
+            return true;
+        });
+    }
+
+    /* ---------------------------------------------------------- organisations */
+
+    /* Every organisation for every project, in one read. There are only ever a
+     * few per project and the whole app needs them resolved up front — the
+     * filter, the preview and the shared library all render through makeTheme —
+     * so paging or per-project fetches would buy nothing. */
+    function listOrgs() {
+        return authed(function () {
+            return fetch(SUPABASE.url + '/rest/v1/project_orgs?select=*&order=project.asc,sort.asc',
+                { headers: headers() });
+        }).then(check);
+    }
+
+    /* Upserts on (project, key), so saving an organisation twice updates it in
+     * place. The key is slugged from the name by the caller and never changes
+     * afterwards, which is what lets a name be corrected without orphaning
+     * anything that referred to it. */
+    function saveOrg(o) {
+        return authed(function () {
+            return fetch(SUPABASE.url + '/rest/v1/project_orgs?on_conflict=project,key', {
+                method: 'POST',
+                headers: headers({
+                    'Content-Type': 'application/json',
+                    'Prefer': 'resolution=merge-duplicates,return=representation'
+                }),
+                body: JSON.stringify({
+                    project: o.project,
+                    key: o.key,
+                    display_name: o.display_name || null,
+                    org_name: o.org_name || null,
+                    org_address: o.org_address || null,
+                    logo_url: o.logo_url || null,
+                    logo_width: o.logo_width || null,
+                    logo_height: o.logo_height || null,
+                    logo_aspect: o.logo_aspect || null,
+                    website_url: o.website_url || null,
+                    stamp_url: o.stamp_url || null,
+                    social: o.social || {},
+                    sort: o.sort || 0
+                })
+            });
+        }).then(check).then(function (rows) { return rows[0]; });
+    }
+
+    /* Deleting an organisation leaves the project's templates alone — they were
+     * never attached to it. They simply render under whichever organisation is
+     * left, or under the project's own branding if it was the last one. */
+    function deleteOrg(project, key) {
+        return authed(function () {
+            return fetch(SUPABASE.url + '/rest/v1/project_orgs' +
+                '?project=eq.' + encodeURIComponent(project) +
+                '&key=eq.' + encodeURIComponent(key), {
+                method: 'DELETE',
+                headers: headers({ 'Prefer': 'return=minimal' })
+            });
+        }).then(function (r) {
+            if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Delete failed'); });
             return true;
         });
     }
@@ -453,6 +516,9 @@ var Api = (function () {
         listBrands: listBrands,
         saveBrand: saveBrand,
         resetBrand: resetBrand,
+        listOrgs: listOrgs,
+        saveOrg: saveOrg,
+        deleteOrg: deleteOrg,
         listByProject: listByProject,
         updateHtml: updateHtml,
         uploadImage: uploadImage,
