@@ -183,6 +183,49 @@
     }
     .togbtn.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
     .togbtn.on:hover { color: var(--on-accent); }
+
+    /* A project can be sent under several organisations. This is intentionally
+       a small identity control rather than the browser's bare select: it makes
+       the active logo and sender readable at a glance, while the menu gives
+       every option equal room for its mark and name. */
+    .org-picker { position: relative; }
+    .org-picker[hidden] { display: none; }
+    .org-trigger {
+        display: inline-flex; align-items: center; gap: 8px; min-width: 178px;
+        height: 32px; padding: 4px 8px 4px 5px; border-radius: 9px;
+        background: var(--accent-soft); border-color: transparent; color: var(--ink);
+        text-align: left;
+    }
+    .org-trigger:hover, .org-picker.open .org-trigger {
+        background: var(--panel); border-color: var(--accent); color: var(--ink);
+        box-shadow: 0 1px 2px rgba(16, 24, 40, .08);
+    }
+    .org-avatar {
+        width: 22px; height: 22px; flex: 0 0 22px; overflow: hidden;
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: 6px; background: var(--accent); color: var(--on-accent);
+        font-size: 10px; font-weight: 700; line-height: 1;
+    }
+    .org-avatar img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .org-trigger-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; }
+    .org-chevron { width: 14px; height: 14px; flex: 0 0 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+    .org-picker.open .org-chevron { transform: rotate(180deg); }
+    .org-menu {
+        position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; width: max-content;
+        min-width: 224px; max-width: min(320px, calc(100vw - 32px)); padding: 5px;
+        border: 1px solid var(--line); border-radius: 11px; background: var(--panel);
+        box-shadow: 0 12px 28px rgba(16, 24, 40, .16);
+    }
+    .org-menu[hidden] { display: none; }
+    .org-option {
+        display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px;
+        border: 0; border-radius: 7px; background: transparent; color: var(--ink); text-align: left;
+    }
+    .org-option:hover, .org-option:focus-visible { background: var(--accent-soft); border-color: transparent; color: var(--ink); outline: 0; }
+    .org-option[aria-selected="true"] { background: var(--accent-soft); }
+    .org-option-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; }
+    .org-check { width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+    .org-option[aria-selected="true"] .org-check { opacity: 1; }
 </style>
 </head>
 <body>
@@ -227,12 +270,10 @@
                     aria-label="Name the merge fields in place" aria-pressed="false">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8.4 1.9h5.7v5.7l-6.6 6.6a1.5 1.5 0 01-2.1 0L1.9 10.7a1.5 1.5 0 010-2.1z"/><circle cx="11.2" cy="4.8" r="1.05"/></svg>
             </button>
-            <!-- Shown only for a project that sends under more than one identity.
-                 One template serves all of them, so this picks which one the
-                 preview stands in for. -->
-            <select id="orgSwitch" style="display:none"
-                    title="Preview as this organisation"
-                    aria-label="Preview as this organisation"></select>
+            <!-- One template can render under each organisation in its project.
+                 The picker is deliberately custom-styled so the active sender's
+                 mark and name are visible without a generic browser control. -->
+            <div class="org-picker" id="orgSwitch" hidden></div>
             <div class="spacer"></div>
             <span class="meta" id="tMeta"></span>
             <button class="primary" id="copyBtn">Copy HTML</button>
@@ -350,29 +391,92 @@ function paintPreview() {
         fn(current.html, makeTheme(current.project, previewOrg), examplesOf(current));
 }
 
-/* The organisation picker in the toolbar, hidden unless this template's project
- * has more than one identity to stand in for. */
+/* The organisation picker is a view-only control. It changes the theme used to
+ * fill portable identity fields in the preview; it never alters the template. */
+function orgAvatar(o) {
+    var label = orgLabel(o);
+    if (o.logo_url) {
+        return '<span class="org-avatar"><img src="' + esc(o.logo_url) + '" alt=""></span>';
+    }
+    return '<span class="org-avatar" aria-hidden="true">' + esc(label.charAt(0).toUpperCase() || '?') + '</span>';
+}
+
 function renderOrgSwitch() {
-    var sel = document.getElementById('orgSwitch');
+    var picker = document.getElementById('orgSwitch');
     var list = current ? orgsFor(current.project) : [];
     if (!list.length) {
-        sel.style.display = 'none';
-        sel.innerHTML = '';
+        picker.hidden = true;
+        picker.classList.remove('open');
+        picker.innerHTML = '';
         previewOrg = '';
         return;
     }
     if (!orgByKey(current.project, previewOrg)) previewOrg = list[0].key;
-    sel.innerHTML = list.map(function (o) {
-        return '<option value="' + esc(o.key) + '"' +
-            (o.key === previewOrg ? ' selected' : '') + '>' + esc(orgLabel(o)) + '</option>';
-    }).join('');
-    sel.style.display = '';
-    sel.value = previewOrg;
+    var active = orgByKey(current.project, previewOrg);
+    picker.hidden = false;
+    picker.classList.remove('open');
+    picker.innerHTML =
+        '<button type="button" class="org-trigger" id="orgTrigger" aria-haspopup="listbox" ' +
+                'aria-expanded="false" aria-controls="orgMenu" title="Preview as this organisation">' +
+            orgAvatar(active) +
+            '<span class="org-trigger-label">' + esc(orgLabel(active)) + '</span>' +
+            '<svg class="org-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>' +
+        '</button>' +
+        '<div class="org-menu" id="orgMenu" role="listbox" aria-label="Preview as this organisation" hidden>' +
+            list.map(function (o) {
+                var selected = o.key === previewOrg;
+                return '<button type="button" class="org-option" role="option" data-org-key="' + esc(o.key) + '"' +
+                        ' aria-selected="' + selected + '">' +
+                    orgAvatar(o) + '<span class="org-option-name">' + esc(orgLabel(o)) + '</span>' +
+                    '<svg class="org-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.3l3 3 6.6-6.6"/></svg>' +
+                '</button>';
+            }).join('') +
+        '</div>';
 }
 
-document.getElementById('orgSwitch').addEventListener('change', function () {
-    previewOrg = this.value;
-    paintPreview();
+function closeOrgSwitch() {
+    var picker = document.getElementById('orgSwitch');
+    var trigger = document.getElementById('orgTrigger');
+    var menu = document.getElementById('orgMenu');
+    if (!trigger || !menu) return;
+    picker.classList.remove('open');
+    trigger.setAttribute('aria-expanded', 'false');
+    menu.hidden = true;
+}
+
+document.getElementById('orgSwitch').addEventListener('click', function (e) {
+    var option = e.target.closest('[data-org-key]');
+    if (option) {
+        previewOrg = option.getAttribute('data-org-key');
+        renderOrgSwitch();
+        paintPreview();
+        return;
+    }
+    if (!e.target.closest('#orgTrigger')) return;
+    var picker = this;
+    var trigger = document.getElementById('orgTrigger');
+    var menu = document.getElementById('orgMenu');
+    var open = !picker.classList.contains('open');
+    picker.classList.toggle('open', open);
+    trigger.setAttribute('aria-expanded', String(open));
+    menu.hidden = !open;
+    if (open) {
+        var selected = menu.querySelector('[aria-selected="true"]');
+        if (selected) selected.focus();
+    }
+});
+
+document.addEventListener('click', function (e) {
+    var picker = document.getElementById('orgSwitch');
+    if (!picker.hidden && !picker.contains(e.target)) closeOrgSwitch();
+});
+
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var picker = document.getElementById('orgSwitch');
+    if (!picker.classList.contains('open')) return;
+    closeOrgSwitch();
+    document.getElementById('orgTrigger').focus();
 });
 
 function show(id) {
@@ -432,13 +536,15 @@ function show(id) {
 
 function loadAll() {
     document.getElementById('list').innerHTML = '<div class="empty">Loading…</div>';
-    /* Brands are needed here now: the sidebar shows each project's logo and its
-     * saved name, and a project added in the app exists only as a brand row, so
-     * without this it would be listed by its raw key. project_brands allows
-     * anonymous select, so this works with no sign-in. Failure is not fatal —
-     * makeTheme falls back to the shipped defaults in theme.js. */
-    Api.listBrands().then(setBrandOverrides).catch(function () { /* defaults are fine */ })
-    .then(function () { return Api.listTemplates(); }).then(function (r) {
+    /* Brand and organisation records are both part of theme resolution. The
+     * sidebar needs the former for project labels and marks; the preview picker
+     * needs the latter to render a saved template under each organisation's
+     * identity. Both are anonymous reads, and either failure has a safe empty
+     * fallback. */
+    Promise.all([
+        Api.listBrands().then(setBrandOverrides).catch(function () { setBrandOverrides([]); }),
+        Api.listOrgs().then(setOrgs).catch(function () { setOrgs([]); })
+    ]).then(function () { return Api.listTemplates(); }).then(function (r) {
         rows = r;
         renderList();
         /* A link straight to one template wins over "show the first one", which
