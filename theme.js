@@ -243,6 +243,7 @@ function makeTheme(key, orgKey) {
         label: src.label || key || '',
         brandName: src.brandName,
         orgAddress: '',
+        orgCountry: '',
         logoUrl: src.logoUrl,
         logoWidth: src.logoWidth,
         /* Both null until a logo has been measured. Blocks size by height when
@@ -317,6 +318,7 @@ function makeTheme(key, orgKey) {
     if (org) {
         if (org.org_name) t.brandName = org.org_name;
         if (org.org_address) t.orgAddress = org.org_address;
+        if (org.country) t.orgCountry = org.country;
         if (org.logo_url) {
             t.logoUrl = org.logo_url;
             /* Taken together with the logo, never separately. Carrying a shape
@@ -455,6 +457,7 @@ function logoMeasured(t) {
 var ORG_FIELDS = {
     name:    'org_name',
     address: 'org_address',
+    country: 'org_country',
     logo:    'org_logo_url',
     website: 'org_website_url',
     stamp:   'org_stamp_url'

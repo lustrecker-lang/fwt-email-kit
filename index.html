@@ -954,6 +954,10 @@
             <label for="oAddress">Postal address <span style="font-weight:400">(optional)</span></label>
             <input type="text" id="oAddress" placeholder="Used for the address line in footers">
         </div>
+        <div class="row">
+            <label for="oCountry">Country <span style="font-weight:400">(optional)</span></label>
+            <select id="oCountry"></select>
+        </div>
         <div class="row inline">
             <label for="oLogo">Logo</label>
             <input type="text" id="oLogo" placeholder="https://… or upload">
@@ -2063,6 +2067,33 @@ document.getElementById('viewBrand').addEventListener('click', function (e) {
     if (e.target.closest('.tip')) e.preventDefault();
 });
 
+/* The country an organisation sits in. Free-form country strings drift into
+ * three spellings of the same place, so it is a fixed list — the Caribbean
+ * states these products serve first, then the wider set, kept alphabetical so
+ * it is scannable. Stored as the name, which is also what reads correctly in an
+ * address line. Blank is allowed and is the default. */
+var ORG_COUNTRIES = [
+    'Antigua and Barbuda', 'Bahamas', 'Barbados', 'Belize', 'Dominica', 'Grenada',
+    'Guyana', 'Jamaica', 'Saint Kitts and Nevis', 'Saint Lucia',
+    'Saint Vincent and the Grenadines', 'Trinidad and Tobago',
+    'Canada', 'United Kingdom', 'United States'
+];
+
+/* Fills the country dropdown, keeping whatever is already saved selectable even
+ * if it is not on the list — an organisation set up before the list changed
+ * should never silently lose its country on the next save. */
+function renderOrgCountryOptions(selected) {
+    var value = String(selected || '');
+    var list = ORG_COUNTRIES.slice();
+    if (value && list.indexOf(value) === -1) list.unshift(value);
+    document.getElementById('oCountry').innerHTML =
+        '<option value="">Not set</option>' +
+        list.map(function (c) {
+            return '<option value="' + esc(c) + '"' +
+                (c === value ? ' selected' : '') + '>' + esc(c) + '</option>';
+        }).join('');
+}
+
 /* Being edited in the organisation dialog. Null while it is closed. */
 var orgDraft = null;
 
@@ -2076,6 +2107,7 @@ function openOrgDialog(orgKey) {
         display_name: existing ? (existing.display_name || '') : '',
         org_name: existing ? (existing.org_name || '') : '',
         org_address: existing ? (existing.org_address || '') : '',
+        country: existing ? (existing.country || '') : '',
         logo_url: existing ? (existing.logo_url || '') : '',
         logo_width: existing ? (existing.logo_width || null) : null,
         logo_height: existing ? (existing.logo_height || null) : null,
@@ -2095,6 +2127,7 @@ function openOrgDialog(orgKey) {
     document.getElementById('oDisplay').value = orgDraft.display_name;
     document.getElementById('oName').value = orgDraft.org_name;
     document.getElementById('oAddress').value = orgDraft.org_address;
+    renderOrgCountryOptions(orgDraft.country);
     document.getElementById('oLogo').value = orgDraft.logo_url;
     document.getElementById('oLogoH').value = orgDraft.logo_height || '';
     document.getElementById('oWebsite').value = orgDraft.website_url;
@@ -2138,6 +2171,9 @@ document.getElementById('oName').addEventListener('input', function (e) {
 });
 document.getElementById('oAddress').addEventListener('input', function (e) {
     orgDraft.org_address = e.target.value;
+});
+document.getElementById('oCountry').addEventListener('change', function (e) {
+    orgDraft.country = e.target.value;
 });
 document.getElementById('oLogo').addEventListener('input', function (e) {
     orgDraft.logo_url = e.target.value.trim();

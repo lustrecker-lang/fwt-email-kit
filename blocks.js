@@ -49,14 +49,19 @@ var BLOCKS = [
     group: 'Header',
     icon: 'logo',
     keywords: 'brand mark masthead image wordmark',
-    desc: 'The mark, small and quiet. Left-aligned by default — centred logos read as marketing. Uses the project logo unless you upload one here.',
+    desc: 'The mark, small and quiet. Left-aligned by default — centred logos read as marketing. Uses the project logo unless you upload one here. Size inherits from the organisation by default, so a mark keeps the height set in Projects.',
     opts: {
         logo: { label: 'Logo', type: 'image', default: '' },
         align: { label: 'Alignment', type: 'select', choices: ['left', 'center'], default: 'left' },
-        size: { label: 'Size', type: 'select', choices: ['small', 'medium', 'large'], default: 'medium' }
+        /* "Inherit" is the default: use whatever height the organisation (or the
+         * project) set for its logo, unscaled. The three t-shirt sizes remain for
+         * a one-off email that wants the mark deliberately bigger or smaller than
+         * the brand's own setting. */
+        size: { label: 'Size', type: 'select', choices: ['inherit', 'small', 'medium', 'large'], default: 'inherit' }
     },
     render: function (t, o) {
-        var scale = { small: 0.72, medium: 1, large: 1.3 }[o.size] || 1;
+        var scale = { inherit: 1, small: 0.72, medium: 1, large: 1.3 }[o.size];
+        if (scale === undefined) scale = 1;
         /* An upload here overrides the project or organisation logo, for the
          * one-off email carrying a department mark or a campaign lockup. Its
          * shape is unknown, so it falls back to width sizing. */
@@ -785,6 +790,40 @@ var BLOCKS = [
         return '' +
 '<tr><td class="px" align="center" style="' + pad(t, 40, 40) + '">' + logo +
     '<p style="margin:0;' + font(t, 'micro', t.textMuted) + '">{{org_name}} &nbsp;·&nbsp; {{org_address}}</p>' +
+'</td></tr>';
+    }
+},
+{
+    id: 'made-with-love',
+    name: 'Made with love',
+    group: 'Footer',
+    icon: 'footer',
+    keywords: 'made with love egovern tech credit country signature subfooter attribution',
+    desc: 'A quiet last line: “Made with love by eGovern Tech in <country>”. The country follows the sending organisation; eGovern Tech links to egovern.com.',
+    opts: {
+        /* Centred by default, so an existing block keeps the position it had
+         * before the choice existed. Left is there for a footer whose other
+         * lines run left, so the credit sits under them rather than off on its
+         * own axis. */
+        align: { label: 'Alignment', type: 'select', choices: ['center', 'left'], default: 'center' },
+        /* On by default. The country is what makes the line specific to the
+         * sender, but a template that never sets one still reads correctly
+         * without a trailing "in". */
+        showCountry: { label: 'Show country', type: 'bool', default: true }
+    },
+    render: function (t, o) {
+        /* Muted micro copy, one line — a credit, not an announcement. The link
+         * colour matches the other footer links rather than the brand, so it
+         * stays as quiet as the rest of the line. */
+        var align = o.align === 'left' ? 'left' : 'center';
+        var link = '<a href="https://egovern.com" style="color:' + t.textMuted +
+            ';text-decoration:underline;">eGovern Tech</a>';
+        /* A merge field, so it follows the sending organisation the same way the
+         * name and address do. Left off when the block is set not to show it. */
+        var where = o.showCountry ? ' in {{org_country}}' : '';
+        return '' +
+'<tr><td class="px" align="' + align + '" style="' + pad(t, 0, 28) + '">' +
+    '<p style="margin:0;' + font(t, 'micro', t.textMuted) + '">Made with love by ' + link + where + '</p>' +
 '</td></tr>';
     }
 }

@@ -340,6 +340,7 @@ var Api = (function () {
                     display_name: o.display_name || null,
                     org_name: o.org_name || null,
                     org_address: o.org_address || null,
+                    country: o.country || null,
                     logo_url: o.logo_url || null,
                     logo_width: o.logo_width || null,
                     logo_height: o.logo_height || null,

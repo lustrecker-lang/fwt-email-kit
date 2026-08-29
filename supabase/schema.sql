@@ -180,6 +180,7 @@ create table if not exists project_orgs (
     display_name text,                    -- name shown in the app
     org_name     text,                    -- fills {{org_name}}, and the wordmark when there is no logo
     org_address  text,                    -- fills {{org_address}}
+    country      text,                    -- the organisation's country, shown under the postal address
     logo_url     text,
     -- logo_height is the size you choose. logo_aspect is the file's real shape,
     -- measured when it is uploaded, and the width is worked out from the two.
@@ -197,6 +198,10 @@ create table if not exists project_orgs (
     created_at   timestamptz not null default now(),
     updated_at   timestamptz not null default now()
 );
+
+-- Migration: a project_orgs table created before organisations could carry a
+-- country needs the column adding on its own. Idempotent, like the rest.
+alter table project_orgs add column if not exists country text;
 
 -- Unique per project, not globally: two projects may both have a "north" org.
 create unique index if not exists project_orgs_project_key_idx

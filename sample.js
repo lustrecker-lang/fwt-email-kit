@@ -39,6 +39,8 @@ var SAMPLE = {
     /* Not on project_brands, so it stays a neutral government address rather
      * than any one agency's. Long enough to test the footer wrapping. */
     org_address: 'Warrens Office Complex, Warrens, St. Michael BB22026, Barbados',
+    /* Neutral, like the address: a stand-in until an organisation sets its own. */
+    org_country: 'Barbados',
 
     first_name: 'Amara',
     body_text: 'We have finished reviewing your application. Everything we needed was in order, and your record has now been updated.',
@@ -99,6 +101,10 @@ function sampleIdentity(theme) {
      * otherwise the neutral government address in SAMPLE is still the better
      * stand-in than an empty line. */
     if (theme.orgAddress) out.org_address = theme.orgAddress;
+
+    /* The organisation's country, when it has set one. Used by the "Made with
+     * love" subfooter; a merge field otherwise, filled per organisation. */
+    if (theme.orgCountry) out.org_country = theme.orgCountry;
 
     /* The fields a portable template leaves for the sender to fill. Supplying
      * them here is what makes the preview show a real organisation rather than a
