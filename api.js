@@ -341,6 +341,13 @@ var Api = (function () {
                     org_name: o.org_name || null,
                     org_address: o.org_address || null,
                     country: o.country || null,
+                    /* Sent even when false, so clearing the official flag
+                     * actually clears it. The three fields below are kept
+                     * whatever the flag says — see the note in schema.sql. */
+                    is_official: !!o.is_official,
+                    ministry_name: o.ministry_name || null,
+                    ministry_website_url: o.ministry_website_url || null,
+                    official_text: o.official_text || null,
                     logo_url: o.logo_url || null,
                     logo_width: o.logo_width || null,
                     logo_height: o.logo_height || null,

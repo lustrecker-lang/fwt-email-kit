@@ -181,6 +181,14 @@ create table if not exists project_orgs (
     org_name     text,                    -- fills {{org_name}}, and the wordmark when there is no logo
     org_address  text,                    -- fills {{org_address}}
     country      text,                    -- the organisation's country, shown under the postal address
+    -- A government organisation sends under a ministry as well as its own name.
+    -- The three ministry/official columns are only meaningful when is_official is
+    -- true; the app hides them otherwise and keeps whatever was typed, so
+    -- toggling official off and back on does not lose the wording.
+    is_official  boolean not null default false,
+    ministry_name        text,            -- fills {{org_ministry_name}}
+    ministry_website_url text,            -- fills {{org_ministry_url}}
+    official_text        text,            -- fills {{org_official_text}}
     logo_url     text,
     -- logo_height is the size you choose. logo_aspect is the file's real shape,
     -- measured when it is uploaded, and the width is worked out from the two.
@@ -200,8 +208,13 @@ create table if not exists project_orgs (
 );
 
 -- Migration: a project_orgs table created before organisations could carry a
--- country needs the column adding on its own. Idempotent, like the rest.
+-- country, or be marked as a government sender, needs the columns adding on
+-- their own. Idempotent, like the rest.
 alter table project_orgs add column if not exists country text;
+alter table project_orgs add column if not exists is_official boolean not null default false;
+alter table project_orgs add column if not exists ministry_name text;
+alter table project_orgs add column if not exists ministry_website_url text;
+alter table project_orgs add column if not exists official_text text;
 
 -- Unique per project, not globally: two projects may both have a "north" org.
 create unique index if not exists project_orgs_project_key_idx

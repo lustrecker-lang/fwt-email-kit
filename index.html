@@ -562,6 +562,19 @@
        rows: label across the top, then input and button on one line. */
     .form .row.inline { grid-template-columns: 1fr auto; align-items: center; }
     .form .row.inline label { grid-column: 1 / -1; }
+    /* A switch rather than a field: the label reads as a statement and sits
+       beside the box, so it cannot be mistaken for something to type in. */
+    .form .row.check { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+    .form .row.check input { width: 16px; height: 16px; }
+    .form .row.check label { grid-column: auto; color: var(--ink); }
+    /* Scoped: the bare `dialog textarea` above is sized for the export modal,
+       which is a whole document tall. A few sentences of official wording is
+       not, so it gets the same treatment as the other fields in the form. */
+    .form textarea {
+        width: 100%; height: auto; min-height: 74px; padding: 7px 9px;
+        border: 1px solid var(--line); border-radius: 7px; background: var(--panel);
+        color: var(--ink); font: inherit; font-size: 13px; line-height: 1.5; resize: vertical;
+    }
     /* Quiet until you go near it — removing an organisation is destructive but
        it is not the point of the dialog. */
     #orgDelete { border-color: transparent; color: #b91c1c; }
@@ -972,6 +985,29 @@
             <label for="oWebsite">Website</label>
             <input type="url" id="oWebsite" placeholder="https://…">
         </div>
+        <!-- Government senders. The ministry fields and the official wording are
+             only relevant when this is on, so they are hidden until it is. What
+             was typed is kept either way, so toggling it off and back on does not
+             cost you the wording. -->
+        <div class="row check">
+            <input type="checkbox" id="oOfficial">
+            <label for="oOfficial">Government official</label>
+        </div>
+        <div id="oOfficialFields" class="form" style="display:none;padding:0">
+            <div class="row">
+                <label for="oMinistry">Ministry</label>
+                <input type="text" id="oMinistry" placeholder="Ministry of Health">
+            </div>
+            <div class="row">
+                <label for="oMinistryUrl">Ministry website</label>
+                <input type="url" id="oMinistryUrl" placeholder="https://…">
+            </div>
+            <div class="row">
+                <label for="oOfficialText">Official text</label>
+                <textarea id="oOfficialText" rows="3"
+                          placeholder="The notice that sits at the very bottom of an official email."></textarea>
+            </div>
+        </div>
         <div class="row inline">
             <label for="oStamp">Stamp <span style="font-weight:400">(optional)</span></label>
             <input type="text" id="oStamp" placeholder="https://… or upload">
@@ -1086,7 +1122,7 @@ function currentTheme() { return makeTheme(state.doc.project, state.previewOrg);
  * them with the same copy. So the 2nd and later instance of any block gets its
  * merge fields suffixed: body_text, body_text_2, body_text_3… */
 function renderItems(theme, items) {
-    var counts = {}, html = '';
+    var counts = {}, html = '', after = '';
     /* Blocks that are only skipped later must not shift the position a block
      * sees, so the live list is resolved up front. */
     var live = items.filter(function (i) { return !!blockById(i.blockId); });
@@ -1098,16 +1134,21 @@ function renderItems(theme, items) {
          * it so far — a full-bleed picture in the first slot has to lose its top
          * padding and pick up the card's rounded top corners. Every other block
          * ignores the extra argument. */
-        var frag = b.render(theme, withDefaults(b, item.opts),
+        var vals = withDefaults(b, item.opts);
+        var frag = b.render(theme, vals,
             { index: idx, first: idx === 0, last: idx === live.length - 1 });
         if (n > 1) {
             frag = frag.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function (m, k) {
                 return '{{' + k + '_' + n + '}}';
             });
         }
-        html += frag + '\n';
+        /* A block can ask to sit under the card instead of inside it. Collected
+         * in composition order and emitted as a group below the card, so two of
+         * them stay in the order you arranged. */
+        if (b.afterCard && b.afterCard(vals)) after += frag + '\n';
+        else html += frag + '\n';
     });
-    return renderDocument(theme, html);
+    return renderDocument(theme, html, after);
 }
 
 /* The template as it is stored, handed over and sent.
@@ -2108,6 +2149,10 @@ function openOrgDialog(orgKey) {
         org_name: existing ? (existing.org_name || '') : '',
         org_address: existing ? (existing.org_address || '') : '',
         country: existing ? (existing.country || '') : '',
+        is_official: existing ? !!existing.is_official : false,
+        ministry_name: existing ? (existing.ministry_name || '') : '',
+        ministry_website_url: existing ? (existing.ministry_website_url || '') : '',
+        official_text: existing ? (existing.official_text || '') : '',
         logo_url: existing ? (existing.logo_url || '') : '',
         logo_width: existing ? (existing.logo_width || null) : null,
         logo_height: existing ? (existing.logo_height || null) : null,
@@ -2132,12 +2177,28 @@ function openOrgDialog(orgKey) {
     document.getElementById('oLogoH').value = orgDraft.logo_height || '';
     document.getElementById('oWebsite').value = orgDraft.website_url;
     document.getElementById('oWebsite').classList.remove('urlbad');
+    document.getElementById('oOfficial').checked = orgDraft.is_official;
+    document.getElementById('oMinistry').value = orgDraft.ministry_name;
+    document.getElementById('oMinistryUrl').value = orgDraft.ministry_website_url;
+    document.getElementById('oMinistryUrl').classList.remove('urlbad');
+    document.getElementById('oOfficialText').value = orgDraft.official_text;
+    renderOrgOfficialFields();
     document.getElementById('oStamp').value = orgDraft.stamp_url;
     document.getElementById('orgDelete').style.display = existing ? '' : 'none';
     document.getElementById('orgErr').textContent = '';
     renderOrgLogoNote();
     document.getElementById('orgDlg').showModal();
     document.getElementById('oDisplay').focus();
+}
+
+/* The ministry and official-wording fields only apply to a government sender,
+ * so they are hidden until the flag is on. Hidden rather than cleared: the
+ * values stay in the draft and on the row, which is what lets somebody toggle
+ * the flag off to see the email without it and back on without retyping the
+ * notice. */
+function renderOrgOfficialFields() {
+    document.getElementById('oOfficialFields').style.display =
+        (orgDraft && orgDraft.is_official) ? 'grid' : 'none';
 }
 
 /* Says whether the logo's shape is known, because that decides whether the
@@ -2191,6 +2252,20 @@ document.getElementById('oWebsite').addEventListener('input', function (e) {
     orgDraft.website_url = e.target.value.trim();
     e.target.classList.toggle('urlbad', !validWebsiteUrl(e.target.value));
 });
+document.getElementById('oOfficial').addEventListener('change', function (e) {
+    orgDraft.is_official = e.target.checked;
+    renderOrgOfficialFields();
+});
+document.getElementById('oMinistry').addEventListener('input', function (e) {
+    orgDraft.ministry_name = e.target.value;
+});
+document.getElementById('oMinistryUrl').addEventListener('input', function (e) {
+    orgDraft.ministry_website_url = e.target.value.trim();
+    e.target.classList.toggle('urlbad', !validWebsiteUrl(e.target.value));
+});
+document.getElementById('oOfficialText').addEventListener('input', function (e) {
+    orgDraft.official_text = e.target.value;
+});
 document.getElementById('oStamp').addEventListener('input', function (e) {
     orgDraft.stamp_url = e.target.value.trim();
 });
@@ -2204,6 +2279,12 @@ document.getElementById('orgForm').addEventListener('submit', function (e) {
     if (!name) { err.textContent = 'Give it a name.'; return; }
     if (!validWebsiteUrl(orgDraft.website_url)) {
         err.textContent = 'Website must start with http:// or https://';
+        return;
+    }
+    /* Only enforced while the flag is on. A stale URL behind an off switch is
+     * not part of the email and should not block saving the rest. */
+    if (orgDraft.is_official && !validWebsiteUrl(orgDraft.ministry_website_url)) {
+        err.textContent = 'Ministry website must start with http:// or https://';
         return;
     }
 

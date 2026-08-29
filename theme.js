@@ -244,6 +244,13 @@ function makeTheme(key, orgKey) {
         brandName: src.brandName,
         orgAddress: '',
         orgCountry: '',
+        /* Government sender. False for every project on its own — only an
+         * organisation can be official, because a ministry belongs to the body
+         * that sends, not to the product it sends from. */
+        isOfficial: false,
+        ministryName: '',
+        ministryUrl: '',
+        officialText: '',
         logoUrl: src.logoUrl,
         logoWidth: src.logoWidth,
         /* Both null until a logo has been measured. Blocks size by height when
@@ -319,6 +326,16 @@ function makeTheme(key, orgKey) {
         if (org.org_name) t.brandName = org.org_name;
         if (org.org_address) t.orgAddress = org.org_address;
         if (org.country) t.orgCountry = org.country;
+        /* The flag is taken as given rather than only when truthy: an
+         * organisation that has been un-marked as official must stop rendering
+         * as one. The three fields below are only read when it is on, so text
+         * left over from before cannot leak into a non-official email. */
+        t.isOfficial = !!org.is_official;
+        if (t.isOfficial) {
+            if (org.ministry_name) t.ministryName = org.ministry_name;
+            if (org.ministry_website_url) t.ministryUrl = org.ministry_website_url;
+            if (org.official_text) t.officialText = org.official_text;
+        }
         if (org.logo_url) {
             t.logoUrl = org.logo_url;
             /* Taken together with the logo, never separately. Carrying a shape
@@ -455,12 +472,18 @@ function logoMeasured(t) {
  * carried a hardcoded organisation name — and the rest are what portable
  * rendering adds. */
 var ORG_FIELDS = {
-    name:    'org_name',
-    address: 'org_address',
-    country: 'org_country',
-    logo:    'org_logo_url',
-    website: 'org_website_url',
-    stamp:   'org_stamp_url'
+    name:     'org_name',
+    address:  'org_address',
+    country:  'org_country',
+    logo:     'org_logo_url',
+    website:  'org_website_url',
+    stamp:    'org_stamp_url',
+    /* Government senders. Only ever emitted by a block that has been told the
+     * organisation is official, so a non-government email never asks
+     * engineering for a ministry it does not have. */
+    ministry:     'org_ministry_name',
+    ministryUrl:  'org_ministry_url',
+    officialText: 'org_official_text'
 };
 
 /* The same theme, rendering its organisation's identity as merge fields instead
@@ -544,6 +567,56 @@ function footerWebsiteUrl(t) {
     if (t.portable) return '{{' + ORG_FIELDS.website + '}}';
     var url = String(t.websiteUrl || '').trim();
     return /^https?:\/\/[^\s<>"']+$/i.test(url) ? esc(url) : '{{help_url}}';
+}
+
+/* ------------------------------------------------------ government senders */
+
+/* Whether this organisation renders as a government body: official, and with a
+ * ministry actually named. Portable, the name arrives as a merge field, so the
+ * flag alone is enough — asking for a literal name there would bake one
+ * ministry into a template meant to serve several.
+ *
+ * Blocks call this rather than reading t.isOfficial directly, so "official but
+ * nothing filled in" cannot render an empty separator or a bare link. */
+function isOfficialSender(t) {
+    if (!t || !t.isOfficial) return false;
+    return t.portable ? true : !!String(t.ministryName || '').trim();
+}
+
+/* The ministry's URL, on the same terms as the organisation's own website. */
+function ministryWebsiteUrl(t) {
+    if (t.portable) return '{{' + ORG_FIELDS.ministryUrl + '}}';
+    var url = String(t.ministryUrl || '').trim();
+    return /^https?:\/\/[^\s<>"']+$/i.test(url) ? esc(url) : '';
+}
+
+/* The ministry's name as it appears in a footer. */
+function ministryName(t) {
+    if (t.portable) return '{{' + ORG_FIELDS.ministry + '}}';
+    return esc(String(t.ministryName || '').trim());
+}
+
+/* "Website | Ministry of Health", the ministry half clickable.
+ *
+ * One helper because all three footers show the same pair, and a separator that
+ * only appears when there is something on both sides of it is the sort of detail
+ * that drifts if it is written out three times. With no ministry URL the name
+ * still shows, as text — a named ministry with no site is better than dropping
+ * the attribution entirely. */
+function ministryFooterLink(t, colour) {
+    if (!isOfficialSender(t)) return '';
+    var name = ministryName(t);
+    if (!name) return '';
+    var url = ministryWebsiteUrl(t);
+    if (!url) return name;
+    return '<a href="' + url + '" style="color:' + colour +
+        ';text-decoration:underline;">' + name + '</a>';
+}
+
+/* The official wording itself, per organisation. */
+function officialNoticeText(t) {
+    if (t.portable) return '{{' + ORG_FIELDS.officialText + '}}';
+    return String(t.officialText || '').trim();
 }
 
 /* ------------------------------------------------------- uploaded assets */

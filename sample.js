@@ -42,6 +42,16 @@ var SAMPLE = {
     /* Neutral, like the address: a stand-in until an organisation sets its own. */
     org_country: 'Barbados',
 
+    /* Government senders. Generic on purpose — a real ministry name here would
+     * read as though the template belonged to it. Long enough that the official
+     * notice wraps the way a real one will. */
+    org_ministry_name: 'Ministry of Public Service',
+    org_ministry_url: 'https://example.gov',
+    org_official_text: 'This is an official communication from the Government. ' +
+        'It is intended solely for the named recipient and may contain ' +
+        'confidential information. If it has reached you in error, please ' +
+        'notify the sender and delete it.',
+
     first_name: 'Amara',
     body_text: 'We have finished reviewing your application. Everything we needed was in order, and your record has now been updated.',
     cta_label: 'View your application', cta_url: '#',
@@ -105,6 +115,15 @@ function sampleIdentity(theme) {
     /* The organisation's country, when it has set one. Used by the "Made with
      * love" subfooter; a merge field otherwise, filled per organisation. */
     if (theme.orgCountry) out.org_country = theme.orgCountry;
+
+    /* Government senders. Only when the organisation is actually marked official
+     * — otherwise the generic fallbacks below would put a ministry into the
+     * preview of an email that has nothing to do with one. */
+    if (theme.isOfficial) {
+        if (theme.ministryName) out.org_ministry_name = theme.ministryName;
+        if (theme.ministryUrl) out.org_ministry_url = theme.ministryUrl;
+        if (theme.officialText) out.org_official_text = theme.officialText;
+    }
 
     /* The fields a portable template leaves for the sender to fill. Supplying
      * them here is what makes the preview show a real organisation rather than a
