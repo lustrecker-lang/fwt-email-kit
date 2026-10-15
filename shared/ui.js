@@ -79,7 +79,7 @@ var UI = (function () {
     /* Never window.confirm: a browser dialog cannot be styled and looks like the
      * page has been hijacked. Resolves true or false, so callers chain on it.
      *
-     *   UI.ask({ title: 'Delete this job?', body: '…', yes: 'Delete' }).then(...)
+     *   UI.ask({ title: 'Delete this job?', body: '…', yes: 'Delete', danger: true }).then(...)
      */
     var dlg = null, pending = null;
 
@@ -120,6 +120,9 @@ var UI = (function () {
         dlg.querySelector('[data-t]').textContent = opts.title || 'Are you sure?';
         dlg.querySelector('[data-b]').textContent = opts.body || '';
         dlg.querySelector('[data-yes]').textContent = opts.yes || 'OK';
+        /* Red for a choice that destroys something, so it does not look like any
+         * other OK. */
+        dlg.querySelector('[data-yes]').classList.toggle('danger', !!opts.danger);
         return new Promise(function (resolve) {
             pending = resolve;
             dlg.showModal();

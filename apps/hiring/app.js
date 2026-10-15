@@ -87,11 +87,11 @@ window.addEventListener('beforeunload', function (e) {
 function friendly(ex) {
     var m = (ex && ex.message) || String(ex);
     if (/hiring_jobs_slug_key|duplicate key.*slug/i.test(m)) return 'Another role already uses that link name. Pick a different one.';
+    if (/on table "hiring_jobs".*hiring_applicants|hiring_applicants_job_id_fkey/i.test(m)) {
+        return 'Someone applied while the role was being deleted.';
+    }
     if (/foreign key|violates.*hiring_responses/i.test(m)) {
         return 'A step that applicants have already answered cannot be deleted. Keep the step, or close the role.';
-    }
-    if (/hiring_applicants.*foreign|hiring_jobs.*applicants/i.test(m)) {
-        return 'A role with applicants cannot be deleted. Close it instead.';
     }
     /* Buckets and columns are created by supabase/hiring.sql, so a missing one
      * means the database is behind the code. */
@@ -198,20 +198,45 @@ $('jobList').addEventListener('click', function (e) {
     if (del) {
         var job = S.jobs.filter(function (j) { return j.id === del.getAttribute('data-del'); })[0];
         if (!job) return;
-        var c = S.counts[job.id];
-        if (c && c.total) { toast('This role has applicants, so it cannot be deleted. Close it instead.', 'err'); return; }
-        UI.ask({ title: 'Delete “' + job.title + '”?', body: 'The role and its funnel are removed. This cannot be undone.', yes: 'Delete' })
-            .then(function (yes) {
-                if (!yes) return;
-                return HiringApi.deleteJob(job.id).then(loadJobs).then(function () { toast('Deleted “' + job.title + '”'); })
-                    .catch(function (ex) { toast(friendly(ex), 'err'); });
-            });
+        deleteRole(job, del.closest('tr'));
         return;
     }
 
     var row = e.target.closest('[data-open]');
     if (row) go('#/j/' + row.getAttribute('data-open'));
 });
+
+/* Deleting a role. Never refused: it asks once, says exactly what goes with it,
+ * and then removes all of it, applicants included. */
+function deleteRole(job, row) {
+    var n = (S.counts[job.id] || {}).total || 0;
+    var people = n === 1 ? '1 applicant' : n + ' applicants';
+    UI.ask({
+        title: 'Delete \u201c' + job.title + '\u201d?',
+        body: n
+            ? 'This permanently deletes the role, its steps, and all ' + people + ': their answers, uploaded files and videos, ' +
+              'timers, notes and email history. It cannot be undone. To keep the applicants, set the role to Closed instead.'
+            : 'The role and its steps are removed. This cannot be undone.',
+        yes: n ? 'Delete everything' : 'Delete',
+        danger: true
+    }).then(function (yes) {
+        if (!yes) return;
+        /* The row says what is happening while files are cleared, which takes a
+         * moment on a role with many applicants. */
+        var note = row && row.querySelector('td.nm small');
+        if (!note && row) { note = document.createElement('small'); row.querySelector('td.nm').appendChild(note); }
+        if (row) { row.style.opacity = '.55'; row.style.pointerEvents = 'none'; }
+        if (note) note.textContent = 'Deleting\u2026';
+        return HiringApi.deleteJobCompletely(job.id, function (done, total) {
+            if (note) note.textContent = 'Deleting files\u2026 ' + done + ' of ' + total;
+        }).then(loadJobs).then(function () {
+            toast('Deleted \u201c' + job.title + '\u201d' + (n ? ' and ' + people : ''));
+        }).catch(function (ex) {
+            toast('Delete did not finish: ' + friendly(ex) + ' Try again to finish it.', 'err');
+            loadJobs();
+        });
+    });
+}
 
 $('jobList').addEventListener('change', function (e) {
     var sel = e.target.closest('[data-jstatus]');

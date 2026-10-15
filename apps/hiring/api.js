@@ -256,6 +256,9 @@ var HiringApi = (function () {
         });
     }
 
+    /* Deletes everything in one applicant's folder of a bucket. A bucket that does
+     * not exist yet (a database that has not had the latest hiring.sql) simply has
+     * nothing to delete, rather than stopping whatever called this. */
     function removeFolder(bucket, folder) {
         return authed(function () {
             return fetch(SUPABASE.url + '/storage/v1/object/list/' + bucket, {
@@ -274,12 +277,59 @@ var HiringApi = (function () {
                     body: JSON.stringify({ prefixes: paths })
                 });
             }).then(check);
+        }).catch(function (ex) {
+            if (/bucket not found/i.test(ex && ex.message)) return null;
+            throw ex;
         });
     }
 
-    /* A link to something an applicant uploaded. Documents expire in five minutes;
-     * a video gets an hour, because a player keeps asking for the next part of the
-     * file while it plays and a link that lapsed mid-video would stop it. */
+    /* A role and everything in it: every applicant's files and videos, then the
+     * applicants (their answers, clocks and email history go with them), then the
+     * role (its steps and templates go with it).
+     *
+     * Files first, for the same reason as deleteApplicant: the folder names are
+     * the applicants' tokens, and once those rows are gone nothing records where
+     * the files are. If this stops part-way, running it again finishes the job.
+     *
+     * The database refuses to delete a role that still has applicants, which is
+     * what stops an accidental delete taking everyone with it. Removing the
+     * applicants first is the deliberate route past that. If someone applies in
+     * the moment between the two, the role's delete is refused and the whole
+     * thing runs once more to catch them.
+     *
+     * onProgress(done, total) reports applicants whose files are cleared. */
+    function deleteJobCompletely(jobId, onProgress) {
+        function attempt() {
+            return staff('hiring_applicants?select=id,token&job_id=eq.' + q(jobId)).then(function (apps) {
+                var queue = apps.slice(), done = 0, total = apps.length;
+                /* A few folders at a time: one by one is slow on a busy role, all
+                 * at once is a burst of hundreds of requests. */
+                function worker() {
+                    var a = queue.shift();
+                    if (!a) return Promise.resolve();
+                    return removeFolder(BUCKET, a.token).then(function () {
+                        return removeFolder(VIDEO_BUCKET, a.token);
+                    }).then(function () {
+                        done++;
+                        if (onProgress) onProgress(done, total);
+                        return worker();
+                    });
+                }
+                var workers = [];
+                for (var i = 0; i < Math.min(4, total); i++) workers.push(worker());
+                return Promise.all(workers);
+            }).then(function () {
+                return staff('hiring_applicants?job_id=eq.' + q(jobId), 'DELETE', undefined, 'return=minimal');
+            }).then(function () {
+                return staff('hiring_jobs?id=eq.' + q(jobId), 'DELETE', undefined, 'return=minimal');
+            });
+        }
+        return attempt().catch(function (ex) {
+            if (/foreign key|violates/i.test(ex && ex.message)) return attempt();
+            throw ex;
+        });
+    }
+
     /* ----------------------------------------------------------------- emails */
 
     /* What a role says when it rejects someone, until it is edited. {{first_name}},
@@ -351,6 +401,9 @@ var HiringApi = (function () {
         });
     }
 
+    /* A link to something an applicant uploaded. Documents expire in five minutes;
+     * a video gets an hour, because a player keeps asking for the next part of the
+     * file while it plays and a link that lapsed mid-video would stop it. */
     function fileUrl(path, kind) {
         return kind === 'video'
             ? Backend.signedUrl(VIDEO_BUCKET, path, 3600)
@@ -442,6 +495,7 @@ var HiringApi = (function () {
         saveJob: saveJob,
         setJobStatus: setJobStatus,
         deleteJob: deleteJob,
+        deleteJobCompletely: deleteJobCompletely,
         listSteps: listSteps,
         saveSteps: saveSteps,
         listApplicants: listApplicants,

@@ -652,8 +652,12 @@ documents and videos go to private buckets and are opened through signed links
 public bucket under a random name, with no way to list it, and its address is only
 handed out once the clock has started. The database also checks that an uploaded
 file named in an answer lives in that applicant's own folder. Deleting an
-applicant deletes their answers and their files. A role that has applicants
-cannot be deleted, only closed, and a step that has answers cannot be removed.
+applicant deletes their answers and their files. Deleting a role asks first and
+says how many applicants go with it; confirming removes the role, its steps and
+every applicant with all their answers, files, videos, timers, notes and email
+history. To keep the applicants, set the role to Closed instead. A step's brief
+video is not removed, as noted under Limits. A step that has answers cannot be
+removed from a role.
 
 **Limits.** Documents are up to 10 MB (PDF, Word, TXT, ZIP or an image) and videos
 up to 50 MB. A role stops taking applications at 1,000. There is no CAPTCHA, so add

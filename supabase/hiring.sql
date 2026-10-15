@@ -124,8 +124,9 @@ create index if not exists hiring_steps_job_idx on hiring_steps (job_id, positio
 
 create table if not exists hiring_applicants (
     id           uuid primary key default gen_random_uuid(),
-    -- Restrict, not cascade: a job that has applicants cannot be deleted, only
-    -- closed. Deleting it would silently take every applicant with it.
+    -- Restrict, not cascade: deleting a role never takes its applicants by
+    -- accident. The app does delete a role with applicants, after asking, by
+    -- removing the applicants (and their files) first and then the role.
     job_id       uuid not null references hiring_jobs (id) on delete restrict,
     -- The applicant's only credential. It lives in their link, never in a list.
     token        uuid not null unique default gen_random_uuid(),
