@@ -49,14 +49,19 @@ var BLOCKS = [
     group: 'Header',
     icon: 'logo',
     keywords: 'brand mark masthead image wordmark',
-    desc: 'The mark, small and quiet. Left-aligned by default — centred logos read as marketing. Uses the project logo unless you upload one here.',
+    desc: 'The mark, small and quiet. Left-aligned by default — centred logos read as marketing. Uses the project logo unless you upload one here. Size inherits from the organisation by default, so a mark keeps the height set in Projects.',
     opts: {
         logo: { label: 'Logo', type: 'image', default: '' },
         align: { label: 'Alignment', type: 'select', choices: ['left', 'center'], default: 'left' },
-        size: { label: 'Size', type: 'select', choices: ['small', 'medium', 'large'], default: 'medium' }
+        /* "Inherit" is the default: use whatever height the organisation (or the
+         * project) set for its logo, unscaled. The three t-shirt sizes remain for
+         * a one-off email that wants the mark deliberately bigger or smaller than
+         * the brand's own setting. */
+        size: { label: 'Size', type: 'select', choices: ['inherit', 'small', 'medium', 'large'], default: 'inherit' }
     },
     render: function (t, o) {
-        var scale = { small: 0.72, medium: 1, large: 1.3 }[o.size] || 1;
+        var scale = { inherit: 1, small: 0.72, medium: 1, large: 1.3 }[o.size];
+        if (scale === undefined) scale = 1;
         /* An upload here overrides the project or organisation logo, for the
          * one-off email carrying a department mark or a campaign lockup. Its
          * shape is unknown, so it falls back to width sizing. */
@@ -660,6 +665,13 @@ var BLOCKS = [
             label: 'Help link destination', type: 'select',
             choices: ['Help Centre', 'Project website'], default: 'Help Centre',
             showIf: function (o) { return !!o.showHelp; }
+        },
+        /* Only shown for a government sender — there is nothing to decide for
+         * anyone else, and an option that never does anything is worse than no
+         * option. Set the ministry on the organisation, under Projects. */
+        showMinistry: {
+            label: 'Ministry link', type: 'bool', default: true,
+            showIf: function (o, t) { return isOfficialSender(t); }
         }
     },
     render: function (t, o) {
@@ -669,10 +681,19 @@ var BLOCKS = [
         var helpUrl = o.helpDestination === 'Project website'
             ? footerWebsiteUrl(t) : '{{help_url}}';
         var helpLabel = helpUrl === '{{help_url}}' ? 'Help Centre' : 'Website';
-        var help = o.showHelp
+        /* A government sender is attributed to its ministry beside its own link:
+         * "Website | Ministry of Health". Empty for everyone else, so a
+         * non-official footer is byte-for-byte what it was. */
+        var ministry = o.showMinistry === false ? '' : ministryFooterLink(t, t.textMuted);
+        var links = [];
+        if (o.showHelp) {
+            links.push('<a href="' + helpUrl + '" style="color:' + t.textMuted +
+                ';text-decoration:underline;">' + helpLabel + '</a>');
+        }
+        if (ministry) links.push(ministry);
+        var help = links.length
             ? '<p style="margin:12px 0 0 0;' + font(t, 'micro', t.textMuted) + '">' +
-              '<a href="' + helpUrl + '" style="color:' + t.textMuted + ';text-decoration:underline;">' +
-              helpLabel + '</a></p>'
+              links.join(' &nbsp;|&nbsp; ') + '</p>'
             : '';
         var logo = o.showLogo
             ? '<div style="padding:24px 0 0 0;">' + footerMark(t, o.logoWidth, 'left', o.logoHeight) + '</div>'
@@ -711,7 +732,11 @@ var BLOCKS = [
         },
         showSocial: { label: 'Social links', type: 'bool', default: true },
         showReason: { label: 'Why you got this', type: 'bool', default: true },
-        reason: { label: 'Why-you-got-this text', type: 'textarea', default: '{{legal_note}}', showIf: function (o) { return !!o.showReason; } }
+        reason: { label: 'Why-you-got-this text', type: 'textarea', default: '{{legal_note}}', showIf: function (o) { return !!o.showReason; } },
+        showMinistry: {
+            label: 'Ministry link', type: 'bool', default: true,
+            showIf: function (o, t) { return isOfficialSender(t); }
+        }
     },
     render: function (t, o) {
         /* Real URLs from the project's brand record, not merge fields. A network
@@ -739,6 +764,15 @@ var BLOCKS = [
               copyParas(o.reason, '{{legal_note}}', font(t, 'micro', t.textMuted), 8) +
               '</div>'
             : '';
+        /* "Website | Ministry of Health" for a government sender, under the
+         * address. Nothing at all for anyone else. */
+        var ministry = o.showMinistry === false ? '' : ministryFooterLink(t, t.textMuted);
+        var govLine = ministry
+            ? '<p style="margin:6px 0 0 0;' + font(t, 'micro', t.textMuted) + '">' +
+              '<a href="' + footerWebsiteUrl(t) + '" style="color:' + t.textMuted +
+              ';text-decoration:underline;">Website</a>' +
+              ' &nbsp;|&nbsp; ' + ministry + '</p>'
+            : '';
         return '' +
 '<tr><td class="px" align="center" style="' + pad(t, 40, 40) + '">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px;font-size:0;line-height:0;mso-line-height-rule:exactly;background-color:' + t.hairline + ';">&nbsp;</td></tr></table>' +
@@ -747,6 +781,7 @@ var BLOCKS = [
     social +
     '<p style="margin:0;' + font(t, 'small', t.text, 'font-weight:600;') + '">{{org_name}}</p>' +
     '<p style="margin:6px 0 0 0;' + font(t, 'micro', t.textMuted) + '">{{org_address}}</p>' +
+    govLine +
     reason +
     '<p style="margin:14px 0 0 0;' + font(t, 'micro', t.textMuted) + '">' +
         '<a href="{{unsubscribe_url}}" style="color:' + t.textMuted + ';text-decoration:underline;">Unsubscribe</a>' +
@@ -774,6 +809,10 @@ var BLOCKS = [
             label: 'Logo width', type: 'select',
             choices: ['28', '36', '44', '56'], default: '36',
             showIf: function (o, t) { return !!o.showLogo && !logoMeasured(t); }
+        },
+        showMinistry: {
+            label: 'Ministry link', type: 'bool', default: true,
+            showIf: function (o, t) { return isOfficialSender(t); }
         }
     },
     render: function (t, o) {
@@ -782,9 +821,91 @@ var BLOCKS = [
         var logo = o.showLogo
             ? '<div style="padding:0 0 14px 0;">' + footerMark(t, o.logoWidth, 'center', o.logoHeight) + '</div>'
             : '';
+        /* On its own line here rather than a third item on the identity line —
+         * the whole point of this footer is that it stays one short line, and a
+         * ministry name is long enough to wrap it. */
+        var ministry = o.showMinistry === false ? '' : ministryFooterLink(t, t.textMuted);
+        var gov = ministry
+            ? '<p style="margin:6px 0 0 0;' + font(t, 'micro', t.textMuted) + '">' + ministry + '</p>'
+            : '';
         return '' +
 '<tr><td class="px" align="center" style="' + pad(t, 40, 40) + '">' + logo +
-    '<p style="margin:0;' + font(t, 'micro', t.textMuted) + '">{{org_name}} &nbsp;·&nbsp; {{org_address}}</p>' +
+    '<p style="margin:0;' + font(t, 'micro', t.textMuted) + '">{{org_name}} &nbsp;·&nbsp; {{org_address}}</p>' + gov +
+'</td></tr>';
+    }
+},
+{
+    id: 'made-with-love',
+    name: 'Made with love',
+    group: 'Footer',
+    icon: 'footer',
+    keywords: 'made with love egovern tech credit country signature subfooter attribution',
+    desc: 'A quiet last line: “Made with love by eGovern Tech in <country>”. The country follows the sending organisation; eGovern Tech links to egovern.com.',
+    opts: {
+        /* Centred by default, so an existing block keeps the position it had
+         * before the choice existed. Left is there for a footer whose other
+         * lines run left, so the credit sits under them rather than off on its
+         * own axis. */
+        align: { label: 'Alignment', type: 'select', choices: ['center', 'left'], default: 'center' },
+        /* On by default. The country is what makes the line specific to the
+         * sender, but a template that never sets one still reads correctly
+         * without a trailing "in". */
+        showCountry: { label: 'Show country', type: 'bool', default: true }
+    },
+    render: function (t, o) {
+        /* Muted micro copy, one line — a credit, not an announcement. The link
+         * colour matches the other footer links rather than the brand, so it
+         * stays as quiet as the rest of the line. */
+        var align = o.align === 'left' ? 'left' : 'center';
+        var link = '<a href="https://egovern.com" style="color:' + t.textMuted +
+            ';text-decoration:underline;">eGovern Tech</a>';
+        /* A merge field, so it follows the sending organisation the same way the
+         * name and address do. Left off when the block is set not to show it. */
+        var where = o.showCountry ? ' in {{org_country}}' : '';
+        return '' +
+'<tr><td class="px" align="' + align + '" style="' + pad(t, 0, 28) + '">' +
+    '<p style="margin:0;' + font(t, 'micro', t.textMuted) + '">Made with love by ' + link + where + '</p>' +
+'</td></tr>';
+    }
+},
+{
+    id: 'official-notice',
+    name: 'Official notice',
+    group: 'Footer',
+    icon: 'footer',
+    keywords: 'official government ministry legal notice disclaimer confidential statement bottom',
+    desc: 'The official wording for a government sender, below the footer. Written once per organisation under Projects, not per email — so every letter from that body carries the same notice.',
+    opts: {
+        /* Off the card by default. This is the small print underneath a letter,
+         * not part of it, so it reads as a separate statement rather than a
+         * final paragraph of the email. */
+        onCanvas: { label: 'Outside the card', type: 'bool', default: true },
+        align: { label: 'Alignment', type: 'select', choices: ['center', 'left'], default: 'center' }
+    },
+    /* Asked per instance, because "outside the card" is an option rather than a
+     * property of the block. True moves this row out of the card table and into
+     * the wrapper below it — the only way to sit under the card without taking
+     * over its rounded bottom corners. */
+    afterCard: function (o) { return !!o.onCanvas; },
+    render: function (t, o) {
+        var align = o.align === 'left' ? 'left' : 'center';
+        /* Per organisation, so it arrives as a merge field on a portable
+         * template and as the saved wording otherwise. */
+        var text = officialNoticeText(t);
+        /* Nothing written and nothing to stand in for it: render an empty cell
+         * rather than a stray rule or padding, so a block left in place on a
+         * non-official organisation costs nothing visually. */
+        if (!text) return '<tr><td style="font-size:0;line-height:0;">&nbsp;</td></tr>';
+        /* Outside the card there is already canvas behind this row, so it takes
+         * no background of its own and the card above keeps its corners. Inside,
+         * it follows the card like any other section. */
+        var inCard = !o.onCanvas;
+        var bg = inCard
+            ? ' bgcolor="' + t.cardBg + '" style="' + pad(t, 8, 24) + 'background-color:' + t.cardBg + ';"'
+            : ' style="' + pad(t, 20, 8) + '"';
+        return '' +
+'<tr><td class="px" align="' + align + '"' + bg + '>' +
+    copyParas(text, '', font(t, 'micro', t.textMuted), 8) +
 '</td></tr>';
     }
 }
@@ -796,7 +917,9 @@ var BLOCKS = [
 /* Wraps a stitched run of block <tr>s into a complete, sendable document.
  * The <style> block is progressive enhancement only — every client that drops
  * it still gets a correct 600px layout from the table attributes. */
-function renderDocument(t, blocksHtml) {
+/* `afterHtml` is for blocks that belong under the card rather than in it — the
+ * official notice is the one so far. See the note where it is emitted below. */
+function renderDocument(t, blocksHtml, afterHtml) {
     /* Trails the preheader so the inbox preview line stops where the preheader
      * does. Without it every client pulls the first words of the email in after
      * it — usually the logo's alt text and then the headline again. These are
@@ -865,6 +988,13 @@ function renderDocument(t, blocksHtml) {
 blocksHtml +
 '      </table>\n' +
 '    </td></tr>\n' +
+/* Rows below the card, on the page canvas. They are siblings of the card rather
+ * than its last rows, which is the whole point: a row inside the card takes over
+ * its rounded bottom corners and squares the white content off above it.
+ *
+ * Empty for almost every email, and then this emits nothing at all, so a
+ * document with no after-card block is byte-for-byte what it was. */
+(afterHtml || '') +
 '  </table>\n' +
 '</td></tr>\n' +
 '</table>\n' +
