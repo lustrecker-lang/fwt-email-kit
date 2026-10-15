@@ -1,0 +1,7 @@
+# Secrets never belong in this repository: everything under apps/ and shared/
+# is served to the browser. Server-side keys (Resend, Supabase secret keys) live
+# in Supabase > Edge Functions > Secrets.
+.env
+.env.*
+supabase/functions/.env
+.DS_Store

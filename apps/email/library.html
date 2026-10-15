@@ -4,27 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Email Library</title>
-<link rel="icon" type="image/png" href="public/icon_email.png">
-<link rel="apple-touch-icon" href="public/icon_email.png">
+<link rel="icon" type="image/png" href="../../public/icon_email.png">
+<link rel="apple-touch-icon" href="../../public/icon_email.png">
+<link rel="stylesheet" href="../../shared/tokens.css">
 <style>
-    /* Greyscale by design — see the note in index.html. The accent is ink, so
-     * nothing here competes with the email in the preview pane. */
-    :root {
-        --bg: #f5f6f8; --panel: #ffffff; --ink: #16181d; --muted: #737a85;
-        --line: #e4e7ec; --accent: #16181d; --accent-soft: #eceef1;
-        --on-accent: #ffffff;
-        --live: #15803d; --live-soft: #f0f7f2; --live-line: #c2e2cc;
-        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --bg: #14161a; --panel: #1c1f25; --ink: #e8eaed; --muted: #99a0aa;
-            --line: #2c3037; --accent: #e8eaed; --accent-soft: #2a2f37;
-            --on-accent: #14161a;
-            --live: #57c98a; --live-soft: #18271e; --live-line: #2f4a39;
-        }
-    }
+    /* Greyscale by design, with tokens from shared/tokens.css. The accent is ink,
+     * so nothing here competes with the email in the preview pane. */
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body {
@@ -189,7 +174,7 @@
 
 <header>
     <div class="brand">
-        <img class="mark" src="public/icon_email.png" alt="" width="22" height="22">
+        <img class="mark" src="../../public/icon_email.png" alt="" width="22" height="22">
         Email <span>Library</span>
     </div>
     <div class="spacer"></div>
@@ -243,7 +228,8 @@
     </section>
 </main>
 
-<script src="config.js"></script>
+<script src="../../shared/config.js"></script>
+<script src="../../shared/backend.js"></script>
 <script src="api.js"></script>
 <script src="theme.js"></script>
 <!-- For fillSample: this page renders the intended email, not the raw template,

@@ -1,0 +1,27 @@
+/* Design tokens for every tool's own interface (not the emails they produce).
+ *
+ * No brand colour. The accent is simply ink, so the UI is greyscale and the only
+ * colour on screen belongs to the thing being built, or to a status (live,
+ * approved, error, success). --on-accent is whatever sits legibly on top of
+ * --accent, which inverts in dark mode.
+ *
+ * A tool that needs more tokens adds them in its own stylesheet rather than
+ * here, so this file stays the part every tool agrees on. */
+:root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #16181d; --muted: #737a85;
+    --line: #e4e7ec; --accent: #16181d; --accent-soft: #eceef1;
+    --on-accent: #ffffff;
+    --live: #15803d; --live-soft: #f0f7f2; --live-line: #c2e2cc;
+    --approved: #a16207; --approved-soft: #fff8e8; --approved-line: #f2d59c;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #14161a; --panel: #1c1f25; --ink: #e8eaed; --muted: #99a0aa;
+        --line: #2c3037; --accent: #e8eaed; --accent-soft: #2a2f37;
+        --on-accent: #14161a;
+        --live: #57c98a; --live-soft: #18271e; --live-line: #2f4a39;
+        --approved: #f3bd62; --approved-soft: #302611; --approved-line: #5b4825;
+    }
+}
