@@ -1,0 +1,244 @@
+/* Interface primitives shared by the tools: form controls, buttons, the app bar,
+ * tables, dialogs and toasts. Needs tokens.css.
+ *
+ * The email tool still carries its own copy of most of this inline. It was
+ * lifted from there, and the email page can move onto this file when someone is
+ * ready to check it visually; until then the two are meant to look identical. */
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; font-family: var(--sans); background: var(--bg); color: var(--ink); font-size: 14px; }
+
+select, textarea, input[type="text"], input[type="email"], input[type="password"],
+input[type="number"], input[type="search"], input[type="url"], input[type="datetime-local"] {
+    font: inherit; font-size: 13.5px; padding: 7px 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--panel); color: var(--ink); max-width: 100%;
+}
+textarea { width: 100%; resize: vertical; line-height: 1.5; }
+select:focus, input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+button {
+    font: inherit; font-size: 13.5px; padding: 7px 13px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button.primary:hover { opacity: .9; color: var(--on-accent); }
+button:disabled { opacity: .5; cursor: default; }
+button:disabled:hover { border-color: var(--line); color: var(--ink); }
+.linkbtn {
+    border: 0; background: none; padding: 0; font-size: 12.5px; color: var(--accent);
+    cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.linkbtn:hover { border: 0; }
+.spacer { flex: 1; }
+.err { color: #b91c1c; font-size: 12.5px; min-height: 17px; }
+.muted { color: var(--muted); }
+
+.view { display: none; height: 100%; }
+.view.on { display: flex; flex-direction: column; }
+
+/* ---------------------------------------------------------------- login */
+.view.center { align-items: center; justify-content: center; }
+.loginbox {
+    width: 360px; max-width: 92vw; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 16px; padding: 30px 28px;
+}
+.loginbox .mark { width: 34px; height: 34px; display: block; object-fit: contain; margin: 0 0 14px; }
+.loginbox h1 { margin: 0 0 4px; font-size: 21px; letter-spacing: -0.4px; }
+.loginbox h1 span { color: var(--muted); font-weight: 400; }
+.loginbox p.sub { margin: 0 0 22px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+.loginbox .row { display: grid; gap: 5px; margin-bottom: 14px; }
+.loginbox label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.loginbox input { max-width: none; width: 100%; padding: 9px 11px; }
+.loginbox button[type="submit"] { width: 100%; padding: 10px; margin-top: 4px; }
+
+/* ------------------------------------------------------------ app chrome */
+.apphead {
+    display: flex; align-items: center; gap: 12px; padding: 13px 22px;
+    background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0;
+}
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.3px; font-size: 15px; }
+.brand span { color: var(--muted); font-weight: 400; }
+.brand .mark { width: 22px; height: 22px; flex-shrink: 0; display: block; object-fit: contain; }
+.brand .mono {
+    width: 22px; height: 22px; border-radius: 6px; background: var(--ink); color: var(--bg);
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+}
+.navicon {
+    padding: 0; width: 34px; height: 31px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--ink); text-decoration: none; cursor: pointer;
+}
+.navicon:hover { border-color: var(--accent); color: var(--accent); }
+.navicon svg {
+    width: 16px; height: 16px; display: block; fill: none; stroke: currentColor;
+    stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round;
+}
+.back {
+    border: 0; background: none; font-size: 17px; color: var(--muted);
+    padding: 4px 8px; border-radius: 7px; cursor: pointer; line-height: 1;
+}
+.back:hover { background: var(--accent-soft); color: var(--accent); border: 0; }
+
+.pagehead { display: flex; align-items: center; gap: 14px; margin: 2px 0 16px; }
+.pagehead h1 { margin: 0; font-size: 23px; letter-spacing: -0.5px; font-weight: 700; }
+.body { flex: 1; overflow-y: auto; padding: 24px 22px 60px; }
+.inner { max-width: 1040px; margin: 0 auto; }
+.blank { text-align: center; color: var(--muted); padding: 70px 20px; line-height: 1.7; font-size: 13.5px; }
+
+/* ---------------------------------------------------------------- tables */
+/* A list is a white panel with hairline rows, like the cards around it. */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; }
+table.tbl { width: 100%; min-width: 560px; border-collapse: collapse; }
+table.tbl th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px;
+    color: var(--muted); font-weight: 700; padding: 12px 18px; white-space: nowrap;
+    border-bottom: 1px solid var(--line);
+}
+table.tbl td { padding: 13px 18px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.tbl tbody tr:last-child td { border-bottom: 0; }
+table.tbl tbody tr { cursor: pointer; }
+table.tbl tbody tr:hover td { background: var(--accent-soft); }
+table.tbl td.nm b { font-size: 14px; font-weight: 600; display: block; }
+table.tbl td.nm small { font-size: 12.5px; color: var(--muted); display: block; margin-top: 2px; }
+table.tbl td.sm { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+table.tbl td.shrink, table.tbl th.shrink { width: 1%; white-space: nowrap; }
+table.tbl td.acts { width: 1%; white-space: nowrap; text-align: right; }
+.iconbtn {
+    border: 0; background: none; color: var(--muted); padding: 6px; border-radius: 7px;
+    cursor: pointer; line-height: 0; display: inline-flex; align-items: center; justify-content: center;
+}
+.iconbtn svg {
+    width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5;
+    stroke-linecap: round; stroke-linejoin: round;
+}
+.iconbtn:hover { background: var(--accent-soft); color: var(--accent); border: 0; }
+.iconbtn.del:hover { background: #fee2e2; color: #b91c1c; }
+.iconbtn:disabled { opacity: .3; }
+.iconbtn:disabled:hover { background: none; color: var(--muted); }
+
+/* A status picker drawn as a pill. The colour says where something stands:
+ * grey is waiting, green is going, amber needs a look, red is a no. */
+.pill {
+    width: auto; max-width: none; padding: 4px 7px; border-radius: 100px;
+    font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+    line-height: 18px; cursor: pointer; color: var(--muted);
+}
+.pill.go    { color: var(--live); border-color: var(--live-line); background: var(--live-soft); }
+.pill.look  { color: var(--approved); border-color: var(--approved-line); background: var(--approved-soft); }
+.pill.no    { color: #b91c1c; border-color: #f2c4c4; background: #fdf1f1; }
+.pill:disabled { cursor: default; opacity: .45; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 13px; font-size: 12.5px; white-space: nowrap; }
+.seg button.on { background: var(--accent); color: var(--on-accent); }
+.seg .ct { opacity: .6; margin-left: 6px; font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------- dialogs */
+dialog {
+    border: 1px solid var(--line); border-radius: 14px; padding: 0; max-width: 900px;
+    width: 92vw; background: var(--panel); color: var(--ink);
+}
+dialog::backdrop { background: rgba(0,0,0,.45); }
+dialog.narrow { width: 400px; max-width: 92vw; }
+dialog.wide { width: 760px; max-width: 96vw; }
+.modal-head { display: flex; align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--line); gap: 8px; }
+.modal-head strong { font-size: 14px; }
+.dlg-form { padding: 16px; display: grid; gap: 12px; }
+.dlg-form p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.55; }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* ---------------------------------------------------------------- toasts */
+.toasts {
+    position: fixed; z-index: 60; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none;
+}
+.toast {
+    pointer-events: auto; cursor: pointer; max-width: 440px;
+    padding: 10px 16px; border-radius: 10px; background: var(--ink); color: var(--bg);
+    font-size: 13px; font-weight: 500; line-height: 1.45;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .24); animation: toastIn .16s ease-out;
+}
+.toast.err { background: #b91c1c; color: #fff; }
+.toast.out { animation: toastOut .2s ease-in forwards; }
+@keyframes toastIn  { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@keyframes toastOut { to { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .toast, .toast.out { animation: none; } }
+
+/* ----------------------------------------------------------- links, chips */
+a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 100px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+    font-size: 12px; line-height: 18px; white-space: nowrap;
+}
+.chip.look { color: var(--approved); border-color: var(--approved-line); background: var(--approved-soft); }
+.chip.no   { color: #b91c1c; border-color: #f2c4c4; background: #fdf1f1; }
+.chip.go   { color: var(--live); border-color: var(--live-line); background: var(--live-soft); }
+
+/* --------------------------------------------------------------- tooltips */
+/* Every explanation lives on the thing it explains, behind a small i. It opens on
+ * hover, on keyboard focus, and on tap (ui.js toggles .open), so it works on a
+ * phone too. */
+.tip {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; flex-shrink: 0; margin-left: 6px; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+    font: 700 9.5px/1 var(--sans); font-style: normal; text-transform: none; letter-spacing: 0;
+    cursor: help; vertical-align: middle;
+}
+.tip:hover, .tip:focus, .tip.open { border-color: var(--accent); color: var(--accent); outline: none; }
+.tip::after {
+    content: attr(data-tip); position: absolute; top: calc(100% + 7px); left: 50%;
+    transform: translateX(-50%); width: max-content; max-width: min(260px, calc(100vw - 24px));
+    z-index: 50; padding: 9px 11px; border-radius: 9px; background: var(--ink); color: var(--bg);
+    font: 400 12px/1.5 var(--sans); text-align: left; white-space: normal; text-transform: none;
+    letter-spacing: 0; opacity: 0; visibility: hidden; transition: opacity .12s; pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .24);
+}
+.tip[data-side="left"]::after  { left: -8px; transform: none; }
+.tip[data-side="right"]::after { left: auto; right: -8px; transform: none; }
+.tip:hover::after, .tip:focus::after, .tip.open::after { opacity: 1; visibility: visible; }
+@media (prefers-reduced-motion: reduce) { .tip::after { transition: none; } }
+
+/* --------------------------------------------------------------- switches */
+/* iOS-style. A real checkbox sits on top, invisible, so clicks, the keyboard and
+ * screen readers all work as they would on a checkbox. */
+.switch { position: relative; display: inline-flex; flex-shrink: 0; cursor: pointer; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.switch .track {
+    position: relative; width: 38px; height: 22px; border-radius: 22px;
+    background: var(--line); transition: background .18s;
+}
+.switch .track::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .18s, background .18s;
+}
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track::after { transform: translateX(16px); background: var(--on-accent); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch input:disabled + .track { opacity: .45; }
+
+/* --------------------------------------------------------------- sortable */
+/* The grip, and the lift-and-slide while dragging. See UI.sortable. */
+.grip {
+    border: 0; background: none; padding: 6px; border-radius: 7px; color: var(--muted);
+    cursor: grab; touch-action: none; line-height: 0; display: inline-flex; flex-shrink: 0;
+}
+.grip svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.grip:hover { background: var(--accent-soft); color: var(--ink); border: 0; }
+.grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.sorting > * { transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+.sorting > .sort-lift {
+    transition: none; position: relative; z-index: 30;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, .16), 0 2px 6px rgba(0, 0, 0, .08);
+}
+.sorting > .sort-lift.sort-settle { transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s; box-shadow: none; }
+body.is-sorting, body.is-sorting * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+@media (prefers-reduced-motion: reduce) {
+    .sorting > *, .sorting > .sort-lift.sort-settle { transition: none; }
+    .switch .track, .switch .track::after { transition: none; }
+}
