@@ -15,8 +15,12 @@ Two pages:
 
 | Page | Who it's for |
 | --- | --- |
-| `index.html` | **You.** Sign in, then a workspace of your templates. Build, upload images, save as many as you like. |
-| `library.html` | **Everyone else.** Browse every saved template, preview it, copy the HTML. Read-only, no sign-in. |
+| `apps/email/index.html` | **You.** Sign in, then a workspace of your templates. Build, upload images, save as many as you like. |
+| `apps/email/library.html` | **Everyone else.** Browse every saved template, preview it, copy the HTML. Read-only, no sign-in. |
+
+The repository is laid out as a set of internal tools that share one sign-in and
+one Supabase project. This README documents the email tool, which is the only
+one so far; see [Files](#files) for how the pieces are split.
 
 ### The app, in three screens
 
@@ -55,11 +59,12 @@ Modern transactional mail, in the Airbnb mould:
 ## Running it
 
 ```bash
-python3 -m http.server 4180 --directory ~/Projects/egovern-email-kit
+python3 -m http.server 4180 --directory ~/Projects/EG/fwt-email-kit
 ```
 
-Then open <http://localhost:4180> for the composer, or
-<http://localhost:4180/library.html> for the library.
+Then open <http://localhost:4180> for the composer (the root forwards to
+`apps/email/`), or <http://localhost:4180/apps/email/library.html> for the
+library.
 
 (Opening the files straight off disk mostly works — the scripts are deliberately
 classic, not ES modules — but serve them so the Supabase calls behave.)
@@ -170,13 +175,13 @@ Already done for this project, but for the record — or to stand up a second on
    sign up".** The policies grant write access to any signed-in user, so leaving
    sign-ups open would let anyone register and edit your templates.
 4. **Authentication → Users → Add user** to create your own account.
-5. Put the Project URL and the publishable (anon) key in `config.js`.
+5. Put the Project URL and the publishable (anon) key in `shared/config.js`.
 
 The publishable key ships in the page source and that is fine — it grants
 nothing on its own. Verified: anonymous inserts return `401` and anonymous
 uploads return `403`, both blocked by RLS.
 
-Never put a `service_role` or `sb_secret_…` key in `config.js`. Those bypass
+Never put a `service_role` or `sb_secret_…` key in `shared/config.js`. Those bypass
 every policy, and that file is served to the browser.
 
 ---
@@ -243,7 +248,7 @@ It is a label, not a deploy. Nothing is sent, synced or published — it records
 which templates are the ones in production, so the list stays readable once
 there are three near-identical drafts of the same letter. Editing and saving a
 live template leaves it live; the flag only moves when you click the switch. The
-[shared library](library.html) shows it as a read-only badge and counts them in
+[shared library](apps/email/library.html) shows it as a read-only badge and counts them in
 the header, which is the useful half for anyone you send the link to.
 
 ---
@@ -481,7 +486,7 @@ so none of this needed a migration.
 
 ### What the engineer receives
 
-Send them a link to one template: `library.html#<template-id>`. Selecting a
+Send them a link to one template: `apps/email/library.html#<template-id>`. Selecting a
 template updates the URL, so the address bar is the link.
 
 That page shows three things. **Preview** is the email as intended — the fixed
@@ -536,17 +541,160 @@ the real, suffixed names, so copy from there rather than guessing.
 
 ---
 
+## Hiring Kit
+
+A custom application funnel per role, behind one public link, so a hundred
+applicants are filtered before anyone is interviewed. Open `apps/hiring/`.
+
+**A role** has a title, a job description and an ordered list of steps. **A step**
+is some text, an optional uploaded video, an optional time limit, and any number
+of questions. A questionnaire is a step with questions only; a case study is a
+step with a brief, a video, a time limit and questions. Applicants must finish each
+step before the next unlocks. Drag a step or a question by its grip (≡) to reorder
+it; the arrow keys do the same on a focused grip.
+
+**Question types:** short answer, long answer, pick one, link, **GitHub
+repository**, **video upload**, and file upload. Every question can carry a line
+of help text under it, such as "make the repository public, or invite us".
+
+**Links.** An applicant can write `google.com`, `www.google.com/work` or a full
+`https://google.com`; they do not need a scheme. What is checked is that it looks
+like a web address, and anything else (`javascript:`, `ftp:`, plain words) is
+refused, on the page and again in the database. Links are saved with `https://`
+added, so they open as written wherever you see them. A GitHub question must point
+at a repository (`github.com/name/project`), not a profile.
+
+**Video.** There is no Loom or other embed any more; videos are uploaded files.
+Applicants answer a *Video upload* question by choosing an MP4, MOV or WebM from
+their device, with a progress readout. You attach a brief to a step by switching
+*Video* on in the step and uploading; switching it off hides the button and drops
+the video from the step (switch it back on before saving and it returns). Applicant videos open
+from **Applicants** in a player that works from a link good for an hour; an iPhone
+`.mov` in a format only Safari plays has an *open or download* fallback.
+
+**File size.** Videos are capped at **50 MB**, because that is the most Supabase
+allows a single file on a free project (the project-wide limit applies on top of
+each bucket's own, and the smaller wins). That is roughly a minute or two of
+phone video. On a paid plan, raise the limit under Storage > Settings first, then
+the bucket numbers in `supabase/hiring.sql` and `video.max` in `shared/backend.js`.
+Documents are capped at 10 MB. Anything over the limit is refused before the upload
+starts, with a sentence naming the limit.
+
+**Timed steps.** Switch *Time limit* on in a step (it starts at 48 hours; 1 to 720)
+and the step becomes a one-shot. The applicant first sees a start screen saying how
+long they will have and that the clock cannot be paused; nothing about the step is
+shown until they press **Start**. Write what goes on that screen in *Before they
+start*, under the time limit: what is coming, what to have ready, how to plan the
+time. Unlike the step's text, that message is public as soon as the role is open,
+so do not put the brief itself in it. From then on the page counts down against
+the server's clock, and the step cannot be submitted once the deadline passes.
+The deadline is fixed when the clock starts, so editing the limit later does not
+move a clock that is already running. An applicant who runs out of time sees a
+"time is up" screen. In **Applicants** the row is marked *Clock running* or
+*Timed out*, and opening them lets you **give 24 more hours** (from now, if the
+clock had already run out). Once a timed step is sent, the applicant cannot go
+back to it.
+
+The deadline is enforced by the database, not the page, with two minutes of
+grace so that an upload that was in flight when time ran out is not thrown away.
+A page that is mid-upload when the clock reaches zero stays open until the upload
+finishes; applicants are told on a timed step to start a video with time to spare.
+The brief of a timed step is also kept out of what the public can download, so it
+cannot be read before the clock starts.
+
+Setting a role to **Open** turns its link on: `apps/hiring/apply.html?job=<link
+name>`. **Preview** on the role walks the funnel as an applicant would, including
+while it is still a draft, and saves nothing.
+
+An applicant gives a name and email and gets a private link to their own
+progress (the address carries a token). They can close the page and return to it.
+Finishing the last step marks them **Submitted**. From **Applicants** you read
+their answers, open uploaded files, move them through Shortlisted, Interview,
+Hired or Rejected, set an interview time, and keep private notes. Scheduling the
+interview itself is manual.
+
+Setup: run `supabase/hiring.sql` in the SQL Editor of the same Supabase project as
+the email tool. **Run it again whenever it changes**: it is safe to re-run and
+brings an older database up to date. The timed steps need the latest version; the
+public page will not load a role's steps until it has been run.
+
+**Rejection emails.** Setting someone to **Rejected**, from the list or from their
+record, opens the email first, already filled in for that person. Edit it if you
+like, then **Reject and send**, **Reject without email**, or **Cancel** (nothing
+changes). Each role has its own wording under **Emails** at the bottom of the role
+editor; `{{first_name}}`, `{{name}}` and `{{role}}` are filled in per applicant.
+Sends are recorded, so the applicant's record shows when it went and who sent it,
+and a second send asks first. Someone rejected without an email can be sent one
+later from their record.
+
+Sending goes through Resend from a Supabase Edge Function, because the Resend key
+is a secret and nothing in this app's own files is. One-time setup:
+
+1. **Resend:** add and verify your domain (Domains > Add domain, then the DNS
+   records it shows). Until then Resend only delivers to your own account address.
+2. **SQL:** run `supabase/hiring.sql` again (adds the templates and the send log).
+3. **Function:** Supabase Dashboard > Edge Functions > Deploy a new function > Via
+   editor. Name it `hiring-email`, paste `supabase/functions/hiring-email/index.ts`,
+   keep JWT verification on, and deploy.
+4. **Secrets:** Edge Functions > Secrets. Add `RESEND_API_KEY` (your `re_…` key),
+   `HIRING_FROM` (e.g. `FWT Hiring <hiring@your-domain.com>`, on the verified
+   domain) and, optionally, `HIRING_REPLY_TO`.
+
+The function only emails the applicant's address as stored in the database, never
+an address sent from the browser, and only for signed-in staff.
+
+**Privacy.** Unlike the email tool, nothing about applicants is public. They have
+no table access at all. The public can read an open role, and reach its steps
+only through functions that hand out an outline (timed steps without their
+content) or, with the applicant's token, a step they have started. Applicant
+documents and videos go to private buckets and are opened through signed links
+(five minutes for documents, an hour for video). A step's brief video sits in a
+public bucket under a random name, with no way to list it, and its address is only
+handed out once the clock has started. The database also checks that an uploaded
+file named in an answer lives in that applicant's own folder. Deleting an
+applicant deletes their answers and their files. A role that has applicants
+cannot be deleted, only closed, and a step that has answers cannot be removed.
+
+**Limits.** Documents are up to 10 MB (PDF, Word, TXT, ZIP or an image) and videos
+up to 50 MB. A role stops taking applications at 1,000. There is no CAPTCHA, so add
+one before sharing a link widely. Video takes storage: delete applicants you no
+longer need, which removes their files too. Replacing or removing a step's brief
+video does not delete the old file, so clear those out of the `hiring-media` bucket
+in the Supabase dashboard from time to time. The time limit starts when
+an applicant presses the button, not when you open the role, so someone can look
+at a timed step's title and duration and come back to it days later.
+
+---
+
 ## Files
+
+Each tool lives in its own folder under `apps/` and loads what it needs from
+`shared/` with classic script tags. Still no build step.
 
 | File | What it is |
 | --- | --- |
-| `index.html` | The composer. Build, theme, upload, save, export. Nothing brand-specific lives here. |
-| `library.html` | The shared read-only link. Browse, preview, copy HTML, read merge fields. |
-| `blocks.js` | **The catalogue.** Every section, plus the document shell and the variable extractor. Edit this to add a section. |
-| `theme.js` | Colour roles, font stacks, per-project themes, the type scale, layout constants, the social network list, and the block-authoring helpers. |
-| `api.js` | Supabase access — auth, templates, uploads and the allow-list they are checked against. Plain `fetch`, no SDK. |
-| `config.js` | Project URL and publishable key. Safe to commit. |
-| `supabase/schema.sql` | The whole backend: one table, its policies, one bucket. |
+| `index.html` | The launcher: one tile per tool, drawn from `shared/apps.js`. A URL carrying a `#/…` route is forwarded to `apps/email/`, so old bookmarks land on the same template. |
+| `shared/apps.js` | The list of tools. Adding one is an entry here plus a folder under `apps/`. |
+| `shared/config.js` | Project URL and publishable key. Safe to commit. One Supabase project serves every tool. |
+| `shared/backend.js` | Sign-in, token refresh and file upload. Knows nothing about emails; every tool builds on it. Defines `Backend`. |
+| `shared/tokens.css` | The colour tokens and dark mode for every tool's own interface. |
+| `public/` | Static images. |
+| `shared/ui.css`, `shared/ui.js` | Interface primitives for new tools: form controls, app bar, tables, dialogs, toasts, and the `UI` helpers (`toast`, `ask`, `esc`, `paras`, `slugify`). The email page still carries its own inline copy of the CSS. |
+| `apps/hiring/index.html`, `app.js` | The hiring tool, staff side: roles, the funnel editor, and the applicant list. See [Hiring Kit](#hiring-kit). |
+| `apps/hiring/apply.html` | The public page an applicant uses. Needs no account. |
+| `apps/hiring/api.js` | The hiring tool's tables and applicant functions. Defines `HiringApi`. |
+| `supabase/functions/hiring-email/index.ts` | The Edge Function that sends applicant emails through Resend. Holds no key itself; reads `RESEND_API_KEY` from Supabase secrets. |
+| `apps/email/index.html` | The composer. Build, theme, upload, save, export. Nothing brand-specific lives here. |
+| `apps/email/library.html` | The shared read-only link. Browse, preview, copy HTML, read merge fields. |
+| `apps/email/blocks.js` | **The catalogue.** Every section, plus the document shell and the variable extractor. Edit this to add a section. |
+| `apps/email/theme.js` | Colour roles, font stacks, per-project themes, the type scale, layout constants, the social network list, and the block-authoring helpers. |
+| `apps/email/sample.js` | Preview filler, and the example values for every merge field. |
+| `apps/email/api.js` | The email tool's tables: templates, brands, organisations. Built on `Backend`. Defines `Api`. |
+| `supabase/schema.sql` | The email tool's backend: its tables, policies and bucket. |
+| `supabase/hiring.sql` | The hiring tool's backend: jobs, steps, applicants, responses, step clocks, the applicant functions and three buckets (documents, applicant videos, brief videos). Run it in the same Supabase project. Unlike the email tables, nothing here is publicly readable except open jobs and their steps. |
+
+The signed-in session is stored under `fwt-tools-session`. A session saved under
+the old `egovern-email-kit-session` key is moved across on first load.
 
 ---
 
@@ -615,7 +763,7 @@ Four rules, and the system holds together:
   derived from the rendered HTML by regex, so a new placeholder shows up in the
   Variables panel with no extra wiring.
 
-New sample copy for the preview goes in `SAMPLE` in `index.html`.
+New sample copy for the preview goes in `SAMPLE` in `apps/email/sample.js`.
 
 ---
 

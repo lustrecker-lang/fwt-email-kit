@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hiring Kit</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/ui.css">
+<style>
+    body { overflow: hidden; }
+
+    /* ---------------------------------------------------------- shared bits */
+    .field { display: grid; gap: 6px; min-width: 0; }
+    .field > label {
+        display: flex; align-items: center; font-size: 12.5px; font-weight: 600; color: var(--muted);
+    }
+    .field > label .opt { font-weight: 400; margin-left: 5px; }
+    .field input:not([type="checkbox"]), .field select { width: 100%; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    button.ghost { border-color: transparent; background: none; color: var(--muted); }
+    button.ghost:hover { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+    button.danger { border-color: transparent; background: none; color: #b91c1c; }
+    button.danger:hover { background: #fdf1f1; color: #b91c1c; border-color: transparent; }
+    .head-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* ----------------------------------------------------------- roles list */
+    .count b { font-weight: 600; }
+    .count span { color: var(--muted); }
+    td.rowacts { white-space: nowrap; text-align: right; }
+
+    /* ----------------------------------------------------------- role editor */
+    .editor { max-width: 720px; margin: 0 auto; display: grid; gap: 28px; }
+    .card {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+        padding: 22px; display: grid; gap: 16px;
+    }
+    input.title { font-size: 17px; font-weight: 600; padding: 10px 12px; }
+    .bad { border-color: #b91c1c !important; }
+
+    .sectionhead { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+    .sectionhead h2 { margin: 0; font-size: 16px; letter-spacing: -0.2px; }
+    .sectionhead .tip { margin-left: 8px; }
+
+    .steps { display: grid; gap: 10px; }
+    .stepcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    .stephead { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; border-radius: 14px; }
+    .stephead .grip { margin: -4px -6px -4px -6px; }
+    .stephead:hover { background: var(--accent-soft); }
+    .stepcard.open .stephead { cursor: default; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .stepcard.open .stephead:hover { background: none; }
+    .num {
+        width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%;
+        background: var(--accent-soft); color: var(--ink);
+        display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+    }
+    .stepcard.open .num { background: var(--accent); color: var(--on-accent); }
+    .stephead .name { flex: 1; min-width: 0; font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stephead .name.empty { color: var(--muted); font-weight: 400; }
+    .stephead input { flex: 1; min-width: 0; font-weight: 600; }
+    .stephead .chips { flex-shrink: 0; }
+    .tools { display: flex; align-items: center; flex-shrink: 0; }
+    .chev { color: var(--muted); transition: transform .15s; line-height: 0; }
+    .chev svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .stepcard.open .chev { transform: rotate(180deg); }
+    .stepbody { padding: 16px 16px 18px; display: grid; gap: 16px; border-top: 1px solid var(--line); }
+
+    /* The step's settings, as an iOS-style group: one row per setting, a switch on
+       the right, and what the switch reveals underneath. No overflow:hidden, or
+       the tooltips would be clipped. */
+    .settings { border: 1px solid var(--line); border-radius: 12px; }
+    .srow + .srow { border-top: 1px solid var(--line); }
+    .shead {
+        display: flex; align-items: center; gap: 2px; padding: 11px 14px; cursor: pointer;
+        font-size: 13.5px; font-weight: 600; user-select: none;
+    }
+    .sbody { padding: 0 14px 14px; display: grid; gap: 10px; justify-items: start; }
+    .timebox { display: flex; align-items: center; gap: 8px; }
+    .timebox input { width: 92px !important; }
+    .sbody .field.intro { width: 100%; }
+    video.brief { width: 100%; max-width: 360px; border-radius: 10px; background: #000; display: block; }
+
+    .qhead { display: flex; align-items: center; gap: 4px; }
+    .qhead h3 { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+    .qlist { display: grid; }
+    .q { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); background: var(--panel); }
+    .q:first-child { border-top: 0; padding-top: 4px; }
+    /* Lifted while dragging: it needs a face of its own over the rows it crosses. */
+    .q.sort-lift { border-radius: 10px; border-top-color: transparent; padding-left: 8px; padding-right: 8px; margin: 0 -8px; }
+    .qtop { display: flex; align-items: center; gap: 8px; }
+    .qtop .grip { margin-left: -6px; }
+    .addq {
+        width: 100%; margin-top: 8px; text-align: left; padding: 9px 12px; border-radius: 10px;
+        border: 1px dashed var(--line); background: none; color: var(--muted); font-size: 13px;
+    }
+    .addq:hover { border-style: solid; border-color: var(--accent); color: var(--ink); }
+    .qtop input[type="text"] { flex: 1; min-width: 0; }
+    .qtop select { width: 150px; flex-shrink: 0; }
+    .req { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+    .q textarea { font-size: 13px; }
+    .q .hintrow { padding-right: 4px; }
+
+    /* ------------------------------------------------------- applicant dialog */
+    dialog.big { width: 900px; max-width: 94vw; }
+    .dgrid { display: grid; grid-template-columns: 1fr 280px; max-height: 68vh; }
+    .dmain { overflow-y: auto; padding: 20px 22px; display: grid; gap: 22px; align-content: start; }
+    .dside {
+        overflow-y: auto; padding: 20px; display: grid; gap: 16px; align-content: start;
+        background: var(--bg); border-left: 1px solid var(--line);
+    }
+    .dfoot { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--line); }
+    .ans { display: grid; gap: 14px; }
+    .ans h4 { margin: 0; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .ans h4 .n { color: var(--muted); font-weight: 600; }
+    .qa .q-l { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    .qa .q-a p { margin: 0 0 8px; line-height: 1.55; font-size: 14px; }
+    .qa .q-a p:last-child { margin-bottom: 0; }
+    .none { color: var(--muted); font-size: 13.5px; }
+    .filebtn {
+        display: inline-flex; align-items: center; gap: 8px; padding: 6px 11px; border-radius: 9px;
+        border: 1px solid var(--line); background: var(--panel); font-size: 13px; color: var(--ink);
+    }
+    .filebtn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .filebtn small { color: var(--muted); font-size: 12px; }
+    video.answervid { width: 100%; max-width: 480px; border-radius: 10px; background: #000; display: block; }
+    .timer-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .timer-row .tt { min-width: 0; font-size: 13px; font-weight: 600; }
+    .timers { display: grid; gap: 10px; }
+    .timers > .lbl { font-size: 12.5px; font-weight: 600; color: var(--muted); display: flex; align-items: center; }
+    button.sm { padding: 4px 9px; font-size: 12px; }
+
+    .filters { display: flex; margin: 0 0 16px; overflow-x: auto; }
+
+    /* ------------------------------------------------------------- emails */
+    #dlgEmail .dlg-form { gap: 14px; padding: 18px 20px 16px; }
+    #dlgEmail textarea { font-size: 14px; line-height: 1.55; }
+    .eto { font-size: 14px; }
+    .eto small { color: var(--muted); font-size: 13px; }
+    .enote:empty, #dlgEmail .err:empty { display: none; }
+    .enote {
+        font-size: 13px; padding: 9px 12px; border-radius: 10px;
+        background: var(--approved-soft); border: 1px solid var(--approved-line); color: var(--approved);
+    }
+    .dlg-actions .spacer { flex: 1; }
+    @media (max-width: 760px) {
+        .two { grid-template-columns: 1fr; }
+        .dgrid { grid-template-columns: 1fr; max-height: 72vh; overflow-y: auto; }
+        .dside { border-left: 0; border-top: 1px solid var(--line); }
+        .stephead .chips { display: none; }
+        /* On a phone the lists keep the columns that matter and drop the rest. */
+        #jobList table.tbl, #appList table.tbl { min-width: 0; }
+        #jobList th:nth-child(4), #jobList td:nth-child(4),
+        #appList th:nth-child(n+4), #appList td:nth-child(n+4) { display: none; }
+        .tbl th, .tbl td { padding-left: 14px !important; padding-right: 14px !important; }
+        table.tbl td.sm { white-space: normal; }
+        table.tbl td.sm .chip { margin: 4px 0 0 0 !important; display: flex; width: max-content; }
+        /* The question gets a full line of its own; the controls sit under it. */
+        .qtop { flex-wrap: wrap; }
+        .qtop input[type="text"] { flex: 1 1 calc(100% - 44px); }
+        .qtop select { flex: 1 1 auto; width: auto; min-width: 0; }
+        .qtop .tools { margin-left: auto; }
+    }
+</style>
+</head>
+<body>
+
+<!-- ================================================================ LOGIN -->
+<section class="view center" id="viewLogin">
+    <form class="loginbox" id="loginForm">
+        <h1>Hiring <span>Kit</span></h1>
+        <p class="sub">Sign in to continue.</p>
+        <div class="row">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" autocomplete="username" required autofocus>
+        </div>
+        <div class="row">
+            <label for="loginPass">Password</label>
+            <input type="password" id="loginPass" autocomplete="current-password" required>
+        </div>
+        <div class="err" id="loginErr"></div>
+        <button class="primary" type="submit" id="loginGo">Sign in</button>
+    </form>
+</section>
+
+<!-- ================================================================= JOBS -->
+<section class="view" id="viewJobs">
+    <div class="apphead">
+        <div class="brand"><span class="mono" aria-hidden="true">H</span> Hiring <span>Kit</span></div>
+        <div class="spacer"></div>
+        <a class="navicon" href="../../" title="All tools" aria-label="All tools">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="4.4" height="4.4" rx="1"/><rect x="9.4" y="2.2" width="4.4" height="4.4" rx="1"/><rect x="2.2" y="9.4" width="4.4" height="4.4" rx="1"/><rect x="9.4" y="9.4" width="4.4" height="4.4" rx="1"/></svg>
+        </a>
+        <button class="navicon" type="button" id="btnSignOut" title="Sign out" aria-label="Sign out">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 13.8H3.4a.9.9 0 0 1-.9-.9V3.1a.9.9 0 0 1 .9-.9h2.8"/><path d="M10.4 11.2 13.6 8l-3.2-3.2"/><path d="M13.6 8H6.4"/></svg>
+        </button>
+    </div>
+    <div class="body"><div class="inner">
+        <div class="pagehead">
+            <h1>Roles</h1>
+            <div class="spacer"></div>
+            <button class="primary" type="button" id="btnNewJob">New role</button>
+        </div>
+        <div id="jobList"><div class="blank">Loading…</div></div>
+    </div></div>
+</section>
+
+<!-- ============================================================ JOB EDITOR -->
+<section class="view" id="viewJob">
+    <div class="apphead">
+        <button class="back" id="btnJobBack" title="Back to roles" aria-label="Back to roles">←</button>
+        <div class="brand" id="jobTitleBar">New role</div>
+        <div class="spacer"></div>
+        <div class="head-actions">
+            <button type="button" id="btnCopyLink">Copy link</button>
+            <button type="button" id="btnJobApplicants">Applicants</button>
+            <button type="button" id="btnJobPreview">Preview</button>
+            <button class="primary" type="button" id="btnJobSave">Save</button>
+        </div>
+    </div>
+    <div class="body"><div class="editor">
+
+        <div class="card">
+            <div class="field">
+                <label for="jTitle">Title</label>
+                <input type="text" class="title" id="jTitle" placeholder="Product Designer" maxlength="120">
+            </div>
+            <div class="two">
+                <div class="field">
+                    <label for="jTeam">Team</label>
+                    <input type="text" id="jTeam" placeholder="Design" maxlength="60">
+                </div>
+                <div class="field">
+                    <label for="jStatus">Status</label>
+                    <select id="jStatus">
+                        <option value="draft">Draft</option>
+                        <option value="open">Open</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label for="jSlug" id="lblSlug">Link name</label>
+                <input type="text" id="jSlug" placeholder="product-designer" maxlength="60" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="field">
+                <label for="jSummary">Summary <span class="opt">optional</span></label>
+                <input type="text" id="jSummary" placeholder="One line shown under the title" maxlength="200">
+            </div>
+            <div class="field">
+                <label for="jDescription" id="lblDesc">Description</label>
+                <textarea id="jDescription" rows="6" placeholder="What the role is, what you will do, what you are looking for."></textarea>
+            </div>
+        </div>
+
+        <div>
+            <div class="sectionhead" id="stepsHead">
+                <h2>Steps</h2>
+                <div class="spacer"></div>
+                <button type="button" id="btnAddStep">Add step</button>
+            </div>
+            <div class="steps" id="stepList"></div>
+        </div>
+
+        <div>
+            <div class="sectionhead" id="emailsHead"><h2>Emails</h2></div>
+            <div class="card">
+                <div class="field">
+                    <label for="tSubject">Rejection subject</label>
+                    <input type="text" id="tSubject" maxlength="200">
+                </div>
+                <div class="field">
+                    <label for="tBody" id="lblTBody">Rejection message</label>
+                    <textarea id="tBody" rows="9" maxlength="10000"></textarea>
+                </div>
+            </div>
+        </div>
+
+    </div></div>
+</section>
+
+<!-- ========================================================== APPLICANTS -->
+<section class="view" id="viewApplicants">
+    <div class="apphead">
+        <button class="back" id="btnAppBack" title="Back to roles" aria-label="Back to roles">←</button>
+        <div class="brand" id="appTitleBar">Applicants</div>
+        <div class="spacer"></div>
+        <button type="button" id="btnAppEdit">Edit role</button>
+    </div>
+    <div class="body"><div class="inner">
+        <div class="filters" id="appFilters"></div>
+        <div id="appList"><div class="blank">Loading…</div></div>
+    </div></div>
+</section>
+
+<!-- A single applicant: what they said on the left, what only staff decide on the right. -->
+<dialog id="dlgApplicant" class="big">
+    <div class="modal-head">
+        <strong id="dlgAppName" tabindex="-1" autofocus style="outline:none"></strong>
+        <span class="muted" id="dlgAppEmail" style="font-size:12.5px"></span>
+        <div class="spacer"></div>
+        <button type="button" class="iconbtn" id="dlgAppClose" aria-label="Close">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+    </div>
+    <div class="dgrid">
+        <div class="dmain" id="dAnswers"></div>
+        <aside class="dside">
+            <div class="field">
+                <label for="dStatus">Status</label>
+                <select id="dStatus"></select>
+            </div>
+            <div class="field">
+                <label for="dInterview">Interview</label>
+                <input type="datetime-local" id="dInterview">
+            </div>
+            <div class="field">
+                <label for="dNotes" id="lblNotes">Notes</label>
+                <textarea id="dNotes" rows="4"></textarea>
+            </div>
+            <div id="dTimers"></div>
+            <div id="dEmails"></div>
+        </aside>
+    </div>
+    <div class="dfoot">
+        <button type="button" class="danger" id="dDelete">Delete</button>
+        <button type="button" class="primary" id="dSave">Save</button>
+    </div>
+</dialog>
+
+<!-- Shown whenever someone is set to Rejected, and from an applicant's record.
+     Nothing is sent without someone reading the email first. -->
+<dialog id="dlgEmail" class="wide">
+    <div class="modal-head">
+        <strong id="eTitle"></strong>
+        <div class="spacer"></div>
+        <button type="button" class="iconbtn" id="eClose" aria-label="Close">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+    </div>
+    <div class="dlg-form">
+        <div class="field">
+            <label>To</label>
+            <div id="eTo" class="eto"></div>
+        </div>
+        <div class="field">
+            <label for="eSubject">Subject</label>
+            <input type="text" id="eSubject" maxlength="200">
+        </div>
+        <div class="field">
+            <label for="eBody">Message</label>
+            <textarea id="eBody" rows="11" maxlength="10000"></textarea>
+        </div>
+        <div class="enote" id="eNote"></div>
+        <div class="err" id="eErr" role="alert"></div>
+        <div class="dlg-actions">
+            <button type="button" class="ghost" id="eCancel">Cancel</button>
+            <div class="spacer"></div>
+            <button type="button" id="eSkip">Reject without email</button>
+            <button type="button" class="primary" id="eSend">Reject and send</button>
+        </div>
+    </div>
+</dialog>
+
+<input type="file" id="briefPicker" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" style="display:none">
+
+<script src="../../shared/config.js"></script>
+<script src="../../shared/backend.js"></script>
+<script src="../../shared/ui.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

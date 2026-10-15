@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apply</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/ui.css">
+<style>
+    /* The public page. One calm column; nothing that looks like an internal tool,
+       because applicants are guests. */
+    body { height: auto; min-height: 100%; }
+    .wrap { max-width: 600px; margin: 0 auto; padding: 56px 20px 96px; }
+    .card {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+        padding: 32px; display: grid; gap: 22px;
+    }
+    h1 { margin: 0; font-size: 30px; letter-spacing: -0.7px; line-height: 1.15; }
+    h2 { margin: 0; font-size: 23px; letter-spacing: -0.5px; line-height: 1.25; }
+    h1:focus, h2:focus { outline: none; }
+    .eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 10px; }
+    .lead { font-size: 16.5px; line-height: 1.55; color: var(--muted); margin: 0; }
+    .prose p { margin: 0 0 12px; line-height: 1.65; font-size: 15.5px; }
+    .prose p:last-child { margin-bottom: 0; }
+    .rule { border: 0; border-top: 1px solid var(--line); width: 100%; margin: 0; }
+
+    .form { display: grid; gap: 18px; }
+    .field { display: grid; gap: 7px; }
+    .field > label, .field > legend { display: flex; align-items: center; font-size: 13.5px; font-weight: 600; padding: 0; }
+    .field .optional { color: var(--muted); font-weight: 400; margin-left: 6px; }
+    .field input[type="text"], .field input[type="email"], .field textarea { width: 100%; font-size: 15.5px; padding: 11px 13px; border-radius: 10px; }
+    fieldset.field { border: 0; margin: 0; min-width: 0; padding: 0; }
+    .choices { display: grid; gap: 8px; }
+    .choice { display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px; border: 1px solid var(--line);
+              border-radius: 10px; cursor: pointer; font-size: 15px; line-height: 1.4; }
+    .choice:hover { border-color: var(--accent); }
+    .choice input { margin-top: 3px; }
+
+    /* The file chooser: the browser's own button, restyled to match, with what was
+       picked (or already uploaded) shown beside it. */
+    .upload { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .upload input[type="file"] { font: inherit; font-size: 13.5px; color: var(--muted); max-width: 100%; }
+    .upload input[type="file"]::file-selector-button {
+        font: inherit; font-size: 13.5px; padding: 8px 14px; margin-right: 10px; border-radius: 9px;
+        border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+    }
+    .upload input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
+    .have { font-size: 13px; color: var(--live); }
+
+    .top { display: grid; gap: 10px; }
+    .top .lbl { display: flex; align-items: center; font-size: 12.5px; color: var(--muted); }
+    .bar { height: 4px; background: var(--accent-soft); border-radius: 4px; overflow: hidden; }
+    .bar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+
+    .timer {
+        display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+        padding: 11px 16px; border-radius: 12px; background: var(--accent-soft); font-size: 13px; color: var(--muted);
+    }
+    .timer b { font-size: 19px; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+    .timer.urgent { background: var(--approved-soft); color: var(--approved); }
+    .timer.urgent b { color: var(--approved); }
+    .timer.late { background: #fdf1f1; color: #b91c1c; }
+    .timer.late b { color: #b91c1c; }
+
+    /* The start gate: the one thing a person needs to know, large. */
+    .gate { text-align: center; padding: 26px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); display: grid; gap: 6px; }
+    .gate .big { font-size: 34px; font-weight: 700; letter-spacing: -1px; line-height: 1.1; }
+    .gate .sub { font-size: 14.5px; color: var(--muted); line-height: 1.5; }
+
+    video.brief { width: 100%; border-radius: 14px; background: #000; display: block; max-height: 70vh; }
+    .actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .actions .right { margin-left: auto; }
+    button.primary { padding: 11px 22px; font-size: 15px; border-radius: 10px; }
+    button.back-btn { border-color: transparent; background: none; color: var(--muted); }
+    button.back-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .banner { padding: 9px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 14px;
+              background: var(--approved-soft); border: 1px solid var(--approved-line); color: var(--approved); }
+    .err { min-height: 0; font-size: 14px; }
+    .err:empty { display: none; }
+    @media (max-width: 520px) { .wrap { padding: 20px 12px 64px; } .card { padding: 22px 18px; } h1 { font-size: 26px; } }
+</style>
+</head>
+<body>
+<main class="wrap" id="root" aria-live="polite">
+    <div class="card"><p class="lead">Loading\u2026</p></div>
+</main>
+
+<script src="../../shared/config.js"></script>
+<script src="../../shared/backend.js"></script>
+<script src="../../shared/ui.js"></script>
+<script src="api.js"></script>
+<script>
+/* The applicant's side of a hiring funnel.
+ *
+ * Everything here talks to Supabase as the anonymous role (see HiringApi). An
+ * applicant has no account: after they give a name and email they hold a token
+ * in this page's address, and that token is the only thing that lets them save
+ * answers. Losing the link loses the way back in, which is why the funnel tells
+ * them to keep it.
+ *
+ * ?preview=1 lets a signed-in member of staff walk a funnel that is still a
+ * draft. Nothing is written in that mode.
+ */
+
+var esc = UI.esc;
+var root = document.getElementById('root');
+
+var params = new URLSearchParams(location.search);
+var SLUG = params.get('job') || '';
+var PREVIEW = params.get('preview') === '1' && Backend.isSignedIn();
+var TOKEN_KEY = 'fwt-hiring-token:' + SLUG;
+var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+var JOB = null, STEPS = [], TOKEN = '', NAME = '';
+var ANSWERS = {};     /* step id -> { field id -> value } */
+var IDX = 0;
+var STARTS = {};      /* step id -> { started_at, deadline_at } for the clocks that are running */
+var SKEW = 0;         /* server time minus this computer's, so the countdown uses the server's clock */
+var BUSY = false;     /* true while an upload or save is in flight */
+var TICK = null;      /* the countdown interval, cleared whenever the screen changes */
+
+function setTitle(t) { document.title = t; }
+
+function shell(inner) {
+    if (TICK) { clearInterval(TICK); TICK = null; }
+    root.innerHTML = (PREVIEW ? '<div class="banner">Preview. You are seeing this as an applicant would. Nothing here is saved.</div>' : '') +
+        '<div class="card">' + inner + '</div>';
+    var h = root.querySelector('h1, h2');
+    if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+    window.scrollTo(0, 0);
+}
+
+function message(title, body) {
+    setTitle(title);
+    shell('<h2>' + esc(title) + '</h2><p class="lead">' + esc(body) + '</p>');
+}
+
+/* ------------------------------------------------------------------ token */
+
+function readToken() {
+    if (PREVIEW) return '';
+    var h = location.hash.slice(1);
+    if (UUID.test(h)) return h;
+    try {
+        var s = localStorage.getItem(TOKEN_KEY);
+        if (s && UUID.test(s)) return s;
+    } catch (e) {}
+    return '';
+}
+
+function keepToken(t) {
+    TOKEN = t;
+    try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
+    /* In the address too, so the link survives clearing site data or opening it
+     * on another device. */
+    history.replaceState(null, '', location.pathname + location.search + '#' + t);
+}
+
+function forgetToken() {
+    TOKEN = '';
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    history.replaceState(null, '', location.pathname + location.search);
+}
+
+/* ------------------------------------------------------------------- boot */
+
+function boot() {
+    if (!SLUG) { message('Nothing to apply for', 'This link is missing the role it is for.'); return; }
+
+    var getJob = PREVIEW ? HiringApi.previewJob : HiringApi.publicJob;
+    /* The public gets an outline: timed steps arrive without their content, which
+     * is only released when the applicant starts the clock. Staff previewing read
+     * the table and so see everything. */
+    var getSteps = PREVIEW ? function (id) { return HiringApi.previewSteps(id); }
+                           : function () { return HiringApi.outline(SLUG); };
+
+    getJob(SLUG).then(function (job) {
+        if (!job) { return null; }
+        JOB = job;
+        return getSteps(job.id).then(function (steps) { STEPS = steps; return job; });
+    }).then(function (job) {
+        if (!job) {
+            message('This position is not open', 'It may have been filled, or the link may be wrong. If you were partway through an application, ask the person who sent you the link.');
+            return;
+        }
+        setTitle(JOB.title + (JOB.team ? ' · ' + JOB.team : ''));
+        var t = readToken();
+        if (!t) { showIntro(); return; }
+        return HiringApi.progress(t).then(function (p) {
+            if (p.job !== JOB.slug) { forgetToken(); showIntro(); return; }
+            TOKEN = t; NAME = p.name; ANSWERS = p.answers || {};
+            STARTS = p.starts || {};
+            if (p.now) SKEW = Date.parse(p.now) - Date.now();
+            if (p.status !== 'in_progress') { showDone(); return; }
+            IDX = firstUnanswered();
+            showStep();
+        }).catch(function () { forgetToken(); showIntro(); });
+    }).catch(function (ex) {
+        message('Something went wrong', 'We could not load this page. Please try again in a moment.');
+    });
+}
+
+function firstUnanswered() {
+    for (var i = 0; i < STEPS.length; i++) if (!ANSWERS[STEPS[i].id]) return i;
+    return Math.max(0, STEPS.length - 1);
+}
+
+/* ------------------------------------------------------------------ timing */
+
+function hoursText(h) {
+    return h >= 48 && h % 24 === 0 ? h + ' hours (' + (h / 24) + ' days)' : h + ' hour' + (h === 1 ? '' : 's');
+}
+
+/* Milliseconds left on a running clock, by the server's time. */
+function remaining(stepId) {
+    var st = STARTS[stepId];
+    return st ? Date.parse(st.deadline_at) - (Date.now() + SKEW) : null;
+}
+
+function clockText(ms) {
+    var t = Math.max(0, Math.floor(ms / 1000));
+    var d = Math.floor(t / 86400), h = Math.floor((t % 86400) / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    function p(n) { return ('0' + n).slice(-2); }
+    return (d ? d + 'd ' : '') + p(h) + ':' + p(m) + ':' + p(s);
+}
+
+/* ------------------------------------------------------------------ intro */
+
+function showIntro() {
+    var ready = STEPS.length > 0;
+    var timed = STEPS.filter(function (s) { return s.time_limit_hours; });
+    shell(
+        '<div>' +
+            (JOB.team ? '<div class="eyebrow">' + esc(JOB.team) + '</div>' : '') +
+            '<h1>' + esc(JOB.title) + '</h1>' +
+        '</div>' +
+        (JOB.summary ? '<p class="lead">' + esc(JOB.summary) + '</p>' : '') +
+        (JOB.description ? '<div class="prose">' + UI.paras(JOB.description) + '</div>' : '') +
+        '<hr class="rule">' +
+        (ready
+            ? '<form id="startForm" class="form" novalidate>' +
+                '<div class="chips">' +
+                    '<span class="chip">' + STEPS.length + ' step' + (STEPS.length === 1 ? '' : 's') +
+                        UI.tip('Your progress is saved as you go.') + '</span>' +
+                    (timed.length ? '<span class="chip look">' + (timed.length === 1 ? 'One timed step' : timed.length + ' timed steps') +
+                        UI.tip(timed.map(function (s) { return s.title + ': ' + hoursText(s.time_limit_hours) + ' from when you start it'; }).join('. ') +
+                               '. You choose when to start.') + '</span>' : '') +
+                '</div>' +
+                '<div class="field"><label for="aName">Your name</label>' +
+                    '<input type="text" id="aName" autocomplete="name" maxlength="200" required></div>' +
+                '<div class="field"><label for="aEmail">Email</label>' +
+                    '<input type="email" id="aEmail" autocomplete="email" maxlength="254" required></div>' +
+                '<div class="err" id="startErr" role="alert"></div>' +
+                '<div><button class="primary" type="submit" id="startGo">Start application</button></div>' +
+              '</form>'
+            : '<p class="lead">This application is not ready yet. Please check back soon.</p>')
+    );
+    var form = document.getElementById('startForm');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var name = document.getElementById('aName').value.trim();
+        var email = document.getElementById('aEmail').value.trim();
+        var err = document.getElementById('startErr');
+        if (!name) { err.textContent = 'Please enter your name.'; return; }
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { err.textContent = 'Please enter a valid email address.'; return; }
+        err.textContent = '';
+        NAME = name;
+
+        if (PREVIEW) { IDX = 0; showStep(); return; }
+
+        var btn = document.getElementById('startGo');
+        btn.disabled = true; btn.textContent = 'Starting\u2026';
+        HiringApi.apply(SLUG, name, email).then(function (token) {
+            keepToken(token);
+            ANSWERS = {}; IDX = 0;
+            showStep();
+        }).catch(function (ex) {
+            err.textContent = ex.message;
+            btn.disabled = false; btn.textContent = 'Start application';
+        });
+    });
+}
+
+/* ------------------------------------------------------------------ steps */
+
+function videoHtml(url) {
+    /* A video a member of staff uploaded, so it is an https address by
+     * construction; anything else is not drawn. */
+    return url && HiringApi.isHttps(url)
+        ? '<video class="brief" controls preload="metadata" playsinline src="' + esc(url) + '"></video>'
+        : '';
+}
+
+/* One question. Anything that explains rather than asks (the staff's help text,
+ * what file types are allowed) is behind the i beside the label. */
+function fieldInput(f, i, saved) {
+    var id = 'fld' + i;
+    var optional = f.required ? '' : '<span class="optional">optional</span>';
+    var isFile = f.type === 'file' || f.type === 'video';
+    var vid = f.type === 'video';
+
+    var notes = [];
+    if (f.hint) notes.push(f.hint);
+    if (isFile) {
+        notes.push((vid ? 'MP4, MOV or WebM' : 'PDF, Word, TXT, ZIP or an image') + ', up to ' +
+            HiringApi.maxMb(vid ? 'video' : 'file') + ' MB.');
+        if (vid && STEPS[IDX] && STEPS[IDX].time_limit_hours) {
+            notes.push('A video can take a few minutes to upload, so start it with time to spare.');
+        }
+    }
+    var tip = notes.length ? UI.tip(notes.join(' ')) : '';
+    var head = esc(f.label) + optional + tip;
+
+    if (f.type === 'choice') {
+        return '<fieldset class="field"><legend>' + head + '</legend><div class="choices">' +
+            (f.options || []).map(function (o) {
+                return '<label class="choice"><input type="radio" name="' + id + '" value="' + esc(o) + '"' +
+                    (saved === o ? ' checked' : '') + '> <span>' + esc(o) + '</span></label>';
+            }).join('') + '</div></fieldset>';
+    }
+    if (f.type === 'longtext') {
+        return '<div class="field"><label for="' + id + '">' + head + '</label>' +
+            '<textarea id="' + id + '" rows="6" maxlength="10000">' + esc(saved || '') + '</textarea></div>';
+    }
+    if (isFile) {
+        return '<div class="field"><label for="' + id + '">' + head + '</label><div class="upload">' +
+            '<input type="file" id="' + id + '" accept="' + esc(HiringApi.acceptAttr(vid ? 'video' : 'file')) + '">' +
+            (saved && saved.name ? '<span class="have">\u2713 ' + esc(saved.name) + ' uploaded</span>' : '') +
+            '</div></div>';
+    }
+    var isLink = f.type === 'url' || f.type === 'github';
+    var ph = f.type === 'github' ? 'github.com/name/project' : isLink ? 'example.com' : '';
+    /* type="text", not "url": a url input makes the browser demand a scheme, and
+     * google.com is a perfectly good answer. inputmode still brings up the URL
+     * keyboard on a phone. */
+    return '<div class="field"><label for="' + id + '">' + head + '</label>' +
+        '<input type="text" id="' + id + '" maxlength="' + (isLink ? 500 : 300) + '"' +
+        (isLink ? ' inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false"' : '') +
+        (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' value="' + esc(saved || '') + '"></div>';
+}
+
+/* A step needs deciding on before it can be drawn: a timed one is behind a gate
+ * until the clock is started, and after that its content has to be fetched,
+ * because the outline left it out. */
+function showStep() {
+    var s = STEPS[IDX];
+    if (!s.time_limit_hours) { renderStep(); return; }
+
+    var left = remaining(s.id);
+    if (left === null) { showGate(s); return; }           /* never started */
+    if (left <= 0 && !ANSWERS[s.id]) { showExpired(s); return; }
+
+    if (s.fields_loaded || PREVIEW) { renderStep(); return; }
+    shell('<p class="lead">Loading\u2026</p>');
+    HiringApi.openStep(TOKEN, s.id, false).then(function (c) {
+        mergeContent(s, c);
+        renderStep();
+    }).catch(function (ex) { message('Something went wrong', ex.message); });
+}
+
+function mergeContent(s, c) {
+    s.body = c.body; s.video_url = c.video_url; s.fields = c.fields || [];
+    s.fields_loaded = true;
+    if (c.deadline_at) STARTS[s.id] = { started_at: c.started_at, deadline_at: c.deadline_at };
+    if (c.now) SKEW = Date.parse(c.now) - Date.now();
+}
+
+function progressHtml() {
+    var pct = Math.round((IDX / STEPS.length) * 100);
+    return '<div class="top"><div class="lbl">Step ' + (IDX + 1) + ' of ' + STEPS.length +
+        (PREVIEW ? '' : UI.tip('Your progress is saved. To come back later, keep this page\u2019s address.')) + '</div>' +
+        '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><i style="width:' + pct + '%"></i></div></div>';
+}
+
+/* Shown before a timed step is started. Nothing about the step is revealed except
+ * its title and how long it allows. */
+function showGate(s) {
+    shell(progressHtml() +
+        '<h2>' + esc(s.title) + '</h2>' +
+        /* The staff's own words for this moment: what is coming, what to have
+         * ready. Released with the outline, so it can be read before starting. */
+        (s.intro ? '<div class="prose">' + UI.paras(s.intro) + '</div>' : '') +
+        '<div class="gate"><div class="big">' + hoursText(s.time_limit_hours).replace(/ \(.*\)/, '') + '</div>' +
+            '<div class="sub">to complete this step, counting from the moment you start.<br>' +
+            'The clock cannot be paused.' + UI.tip('Nothing about this step is shown until you start. Once time runs out you will not be able to submit it. Start when you are ready to work on it.') + '</div></div>' +
+        '<div class="actions">' +
+            (canGoBack() ? '<button type="button" class="back-btn" id="btnBack">Back</button>' : '') +
+            '<button class="primary right" type="button" id="btnStart">Start</button>' +
+        '</div>');
+
+    var back = document.getElementById('btnBack');
+    if (back) back.addEventListener('click', function () { IDX--; showStep(); });
+    document.getElementById('btnStart').addEventListener('click', function () {
+        var btn = this;
+        btn.disabled = true; btn.textContent = 'Starting\u2026';
+        if (PREVIEW) {
+            /* Simulated: staff see the timed screen without any real clock. */
+            STARTS[s.id] = { started_at: new Date().toISOString(),
+                             deadline_at: new Date(Date.now() + SKEW + s.time_limit_hours * 3600000).toISOString() };
+            renderStep(); return;
+        }
+        HiringApi.openStep(TOKEN, s.id, true).then(function (c) {
+            mergeContent(s, c);
+            renderStep();
+        }).catch(function (ex) {
+            message('We could not start this step', ex.message);
+        });
+    });
+}
+
+function showExpired(s) {
+    setTitle('Time is up');
+    shell(progressHtml() +
+        '<h2>Time is up for \u201c' + esc(s.title) + '\u201d</h2>' +
+        '<p class="lead">The ' + hoursText(s.time_limit_hours) + ' for this step have passed, so it can no longer be submitted. ' +
+        'If something went wrong on your side, contact the person who sent you this link.</p>');
+}
+
+/* Back only goes to steps that can still be edited. A timed step is a one-shot:
+ * once it is sent, the answer stands. */
+function canGoBack() {
+    return IDX > 0 && !STEPS[IDX - 1].time_limit_hours;
+}
+
+function renderStep() {
+    var s = STEPS[IDX], saved = ANSWERS[s.id] || {};
+    var last = IDX === STEPS.length - 1;
+    var timed = !!s.time_limit_hours;
+
+    shell(
+        progressHtml() +
+        (timed ? '<div class="timer" id="timer" role="timer"><span>Time left</span><b id="timeLeft"></b></div>' : '') +
+        '<h2>' + esc(s.title) + '</h2>' +
+        (s.body ? '<div class="prose">' + UI.paras(s.body) + '</div>' : '') +
+        videoHtml(s.video_url) +
+        '<form id="stepForm" class="form" novalidate>' +
+            (s.fields || []).map(function (f, i) { return fieldInput(f, i, saved[f.id]); }).join('') +
+            '<div class="err" id="stepErr" role="alert"></div>' +
+            '<div class="actions">' +
+                (canGoBack() ? '<button type="button" class="back-btn" id="btnBack">Back</button>' : '') +
+                '<button class="primary right" type="submit" id="btnNext">' + (last ? 'Submit' : (timed ? 'Send it back' : 'Continue')) + '</button>' +
+            '</div>' +
+        '</form>'
+    );
+
+    document.getElementById('stepForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        submitStep(s, saved, last);
+    });
+    var back = document.getElementById('btnBack');
+    if (back) back.addEventListener('click', function () { IDX--; showStep(); });
+
+    if (timed) startCountdown(s);
+}
+
+/* Counts down against the server's clock. When it reaches zero the step is closed
+ * on screen; the database enforces the same deadline regardless of this page. */
+function startCountdown(s) {
+    var box = document.getElementById('timer'), out = document.getElementById('timeLeft');
+    function tick() {
+        var ms = remaining(s.id);
+        /* A running upload is allowed to finish: the database gives a couple of
+         * minutes' grace for exactly that. Anything else at zero is closed. */
+        if (ms <= 0 && !BUSY) { showExpired(s); return; }
+        out.textContent = clockText(Math.max(0, ms));
+        box.classList.toggle('urgent', ms < 3600000 && ms > 0);
+        box.classList.toggle('late', ms <= 0);
+    }
+    tick();
+    TICK = setInterval(tick, 1000);
+}
+
+function submitStep(step, saved, last) {
+    var err = document.getElementById('stepErr'), btn = document.getElementById('btnNext');
+    var answers = {}, uploads = [];
+    err.textContent = '';
+
+    for (var i = 0; i < step.fields.length; i++) {
+        var f = step.fields[i], id = 'fld' + i, v;
+        if (f.type === 'choice') {
+            var picked = document.querySelector('input[name="' + id + '"]:checked');
+            v = picked ? picked.value : '';
+        } else if (f.type === 'file' || f.type === 'video') {
+            var input = document.getElementById(id), file = input.files && input.files[0];
+            var kind = f.type === 'video' ? 'video' : 'applicant';
+            if (file) {
+                var bad = Backend.checkFile(file, kind);
+                if (bad) { err.textContent = f.label + ': ' + bad; input.focus(); return; }
+                uploads.push({ field: f, file: file, kind: kind });
+                v = { name: file.name, size: file.size };   /* path filled in after upload */
+            } else {
+                v = saved[f.id] || '';
+            }
+        } else {
+            v = document.getElementById(id).value.trim();
+            var linkProblem = (f.type === 'url' || f.type === 'github') ? HiringApi.checkLink(f.type, v) : '';
+            if (linkProblem) {
+                err.textContent = f.label + ': ' + linkProblem;
+                document.getElementById(id).focus();
+                return;
+            }
+            /* Stored with a scheme, so it opens as written wherever it is shown. */
+            if (v && (f.type === 'url' || f.type === 'github')) v = HiringApi.linkHref(v);
+        }
+        if (f.required && (v === '' || v === undefined)) {
+            err.textContent = 'Please answer: ' + f.label;
+            var focusEl = document.getElementById(id) || document.querySelector('input[name="' + id + '"]');
+            if (focusEl) focusEl.focus();
+            return;
+        }
+        if (v !== '' && v !== undefined) answers[f.id] = v;
+    }
+
+    btn.disabled = true; btn.textContent = last ? 'Submitting…' : 'Saving…';
+    function reset() { btn.disabled = false; btn.textContent = last ? 'Submit' : (step.time_limit_hours ? 'Send it back' : 'Continue'); }
+
+    /* Files first, one at a time, so a failure names the file that caused it. */
+    BUSY = true;
+    var chain = Promise.resolve();
+    uploads.forEach(function (u) {
+        chain = chain.then(function () {
+            if (PREVIEW) { answers[u.field.id] = { path: 'preview', name: u.file.name, size: u.file.size }; return; }
+            btn.textContent = 'Uploading ' + u.file.name + '…';
+            return HiringApi.uploadApplicantFile(TOKEN, u.file, u.kind, function (done, total) {
+                btn.textContent = 'Uploading ' + u.file.name + ' ' + Math.round(done / total * 100) + '%';
+            }).then(function (path) {
+                answers[u.field.id] = { path: path, name: u.file.name, size: u.file.size };
+                btn.textContent = last ? 'Submitting…' : 'Saving…';
+            });
+        });
+    });
+
+    chain.then(function () {
+        if (PREVIEW) return last ? 'submitted' : 'in_progress';
+        return HiringApi.saveStep(TOKEN, step.id, answers);
+    }).then(function (status) {
+        BUSY = false;
+        ANSWERS[step.id] = answers;
+        if (status === 'submitted') { showDone(); return; }
+        IDX = Math.min(IDX + 1, STEPS.length - 1);
+        showStep();
+    }).catch(function (ex) {
+        BUSY = false;
+        if (/Time is up/i.test(ex.message)) { showExpired(step); return; }
+        /* A setup problem on our side, not something the applicant can fix. */
+        err.textContent = /bucket not found/i.test(ex.message)
+            ? 'Uploads are not available right now. Please try again later, or contact the person who sent you this link.'
+            : ex.message;
+        reset();
+    });
+}
+
+/* ------------------------------------------------------------------- done */
+
+function showDone() {
+    setTitle('Application received');
+    shell(
+        '<h2>Thank you' + (NAME ? ', ' + esc(NAME.split(' ')[0]) : '') + '</h2>' +
+        '<p class="lead">' + (PREVIEW
+            ? 'That was the last step. In a real application this is where the applicant is told it was received.'
+            : 'We have your application for ' + esc(JOB.title) + '. If it looks like a fit, we will be in touch by email to arrange an interview.') + '</p>'
+    );
+}
+
+boot();
+</script>
+</body>
+</html>
