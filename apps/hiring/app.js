@@ -1,7 +1,9 @@
 /* The hiring tool, staff side: roles, their funnels, and the people in them.
  *
  * Routes (hash): #/ roles  ·  #/new  ·  #/j/<id> edit  ·  #/j/<id>/applicants
- * Sign-in is shared with the other tools through Backend.
+ *                #/j/<id>/sourcing  ·  #/j/<id>/swipe  ·  #/j/<id>/outreach  ·  #/settings
+ * Sign-in is shared with the other tools through Backend. The sourcing screens
+ * live in sourcing.js, which loads after this file.
  */
 
 var esc = UI.esc, toast = UI.toast;
@@ -34,11 +36,12 @@ var TIPS = {
 };
 
 var S = {
-    jobs: [], counts: {},
+    jobs: [], counts: {}, prospects: {}, sourcingOn: {},
     job: null,            /* the role being edited */
     steps: [],            /* its funnel, in order */
     removed: [],          /* ids of steps taken out since the last save */
     dirty: false,
+    srcDirty: false,      /* the sourcing settings have unsaved changes */
     hintOpen: {},         /* question id -> its help-text box is showing */
     slugTouched: false,   /* once the link name is typed by hand, stop deriving it */
     app: { job: null, steps: [], list: [], answered: {}, starts: {}, filter: 'all', open: null }
@@ -47,7 +50,8 @@ var S = {
 /* ================================================================== router */
 
 function showView(name) {
-    ['viewLogin', 'viewJobs', 'viewJob', 'viewApplicants'].forEach(function (v) {
+    ['viewLogin', 'viewJobs', 'viewJob', 'viewApplicants', 'viewSourcing', 'viewSwipe', 'viewOutreach',
+     'viewSettings'].forEach(function (v) {
         $(v).classList.toggle('on', v === name);
     });
 }
@@ -59,7 +63,11 @@ function route() {
     if (!Backend.isSignedIn()) { showView('viewLogin'); return; }
 
     if (h === '#/new') { showView('viewJob'); startNewJob(); return; }
+    if (h === '#/settings') { showView('viewSettings'); openSettings(); return; }
     if ((m = h.match(/^#\/j\/([0-9a-f-]+)\/applicants$/i))) { showView('viewApplicants'); openApplicants(m[1]); return; }
+    if ((m = h.match(/^#\/j\/([0-9a-f-]+)\/sourcing$/i))) { showView('viewSourcing'); openSourcing(m[1]); return; }
+    if ((m = h.match(/^#\/j\/([0-9a-f-]+)\/swipe$/i))) { showView('viewSwipe'); openSwipe(m[1]); return; }
+    if ((m = h.match(/^#\/j\/([0-9a-f-]+)\/outreach$/i))) { showView('viewOutreach'); openOutreach(m[1]); return; }
     if ((m = h.match(/^#\/j\/([0-9a-f-]+)$/i))) { showView('viewJob'); openJob(m[1]); return; }
 
     showView('viewJobs');
@@ -67,16 +75,18 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 
-/* Leaving the editor with unsaved work asks first. Only the buttons in this app
- * can be intercepted; the browser's own prompt covers closing the tab. */
+/* Leaving the editor (or the sourcing settings) with unsaved work asks first.
+ * Only the buttons in this app can be intercepted; the browser's own prompt
+ * covers closing the tab. */
 function leaveTo(hash) {
-    if (!S.dirty) { go(hash); return; }
+    if (!S.dirty && !S.srcDirty) { go(hash); return; }
     UI.ask({ title: 'Discard your changes?', body: 'This role has changes that are not saved.', yes: 'Discard' })
-        .then(function (yes) { if (yes) { S.dirty = false; go(hash); } });
+        .then(function (yes) { if (yes) { S.dirty = false; S.srcDirty = false; go(hash); } });
 }
 
 window.addEventListener('beforeunload', function (e) {
-    if (S.dirty && $('viewJob').classList.contains('on')) { e.preventDefault(); e.returnValue = ''; }
+    if ((S.dirty && $('viewJob').classList.contains('on')) ||
+        (S.srcDirty && $('viewSourcing').classList.contains('on'))) { e.preventDefault(); e.returnValue = ''; }
 });
 
 /* Turn a database or network error into a sentence about what to do. */
@@ -144,8 +154,12 @@ function statusSelect(list, value, attr, id, label) {
 
 function loadJobs() {
     $('jobList').innerHTML = '<div class="blank">Loading…</div>';
-    Promise.all([HiringApi.listJobs(), HiringApi.applicantCounts()]).then(function (r) {
-        S.jobs = r[0]; S.counts = r[1];
+    /* The sourcing reads fail quietly (to empty) on a database that has not had
+     * the sourcing tables yet, so the list still loads. */
+    Promise.all([
+        HiringApi.listJobs(), HiringApi.applicantCounts(), HiringApi.prospectCounts(), HiringApi.sourcingFlags()
+    ]).then(function (r) {
+        S.jobs = r[0]; S.counts = r[1]; S.prospects = r[2]; S.sourcingOn = r[3];
         renderJobs();
     }).catch(function (ex) {
         $('jobList').innerHTML = '<div class="blank">Could not load roles:<br>' + esc(friendly(ex)) + '</div>';
@@ -158,7 +172,7 @@ function renderJobs() {
         return;
     }
     $('jobList').innerHTML = '<div class="panel"><table class="tbl"><thead><tr>' +
-        '<th>Role</th><th class="shrink">Status</th><th>Applicants</th><th>Updated</th><th></th>' +
+        '<th>Role</th><th class="shrink">Status</th><th>Applicants</th><th>Sourcing</th><th>Updated</th><th></th>' +
         '</tr></thead><tbody>' +
         S.jobs.map(function (j) {
             var c = S.counts[j.id] || { total: 0, submitted: 0 };
@@ -168,12 +182,25 @@ function renderJobs() {
                 '<td class="sm"><button type="button" class="linkbtn" data-apps="' + esc(j.id) + '">' + c.total +
                     (c.total === 1 ? ' applicant' : ' applicants') + '</button>' +
                     (c.total ? ' \u00b7 ' + c.submitted + ' submitted' : '') + '</td>' +
+                '<td class="sm">' + sourcingCell(j) + '</td>' +
                 '<td class="sm">' + UI.fmtDate(j.updated_at) + '</td>' +
                 '<td class="rowacts">' +
                     '<button class="iconbtn" data-link="' + esc(j.slug) + '" title="Copy the applicant link" aria-label="Copy the applicant link">' + ICON.copy + '</button>' +
                     '<button class="iconbtn del" data-del="' + esc(j.id) + '" title="Delete" aria-label="Delete">' + ICON.x + '</button>' +
                 '</td></tr>';
         }).join('') + '</tbody></table></div>';
+}
+
+/* Off, or on with what is waiting: cards to swipe, people to contact. */
+function sourcingCell(j) {
+    var p = S.prospects[j.id] || {}, on = !!S.sourcingOn[j.id];
+    var waiting = (p.queued || 0) + (p.maybe || 0), contact = (p.reach_out || 0);
+    if (!on && !waiting && !contact) {
+        return '<button type="button" class="linkbtn" data-src="' + esc(j.id) + '" style="color:var(--muted)">Off</button>';
+    }
+    return '<button type="button" class="linkbtn" data-swipe="' + esc(j.id) + '">' +
+        (waiting ? waiting + ' to review' : on ? 'On' : 'Paused') + '</button>' +
+        (contact ? ' \u00b7 ' + contact + ' to contact' : '');
 }
 
 $('btnNewJob').addEventListener('click', function () { go('#/new'); });
@@ -183,6 +210,10 @@ $('jobList').addEventListener('click', function (e) {
 
     var apps = e.target.closest('[data-apps]');
     if (apps) { go('#/j/' + apps.getAttribute('data-apps') + '/applicants'); return; }
+    var src = e.target.closest('[data-src]');
+    if (src) { go('#/j/' + src.getAttribute('data-src') + '/sourcing'); return; }
+    var sw = e.target.closest('[data-swipe]');
+    if (sw) { go('#/j/' + sw.getAttribute('data-swipe') + '/swipe'); return; }
 
     var link = e.target.closest('[data-link]');
     if (link) {
@@ -340,9 +371,10 @@ function fillEditor() {
     $('jobTitleBar').textContent = j.title || 'New role';
 
     var saved = !!j.id;
-    ['btnJobApplicants', 'btnJobPreview', 'btnCopyLink'].forEach(function (id) {
+    ['btnJobPreview', 'btnCopyLink'].forEach(function (id) {
         $(id).style.display = saved ? '' : 'none';
     });
+    renderRoleTabs(saved ? j : null, 'role');
     renderSteps();
 }
 
@@ -765,7 +797,6 @@ $('btnJobSave').addEventListener('click', function () {
 });
 
 $('btnJobBack').addEventListener('click', function () { leaveTo('#/'); });
-$('btnJobApplicants').addEventListener('click', function () { if (S.job && S.job.id) leaveTo('#/j/' + S.job.id + '/applicants'); });
 $('btnJobPreview').addEventListener('click', function () {
     if (!S.job || !S.job.id) return;
     if (S.dirty) toast('The preview shows the last saved version.');
@@ -797,6 +828,7 @@ function openApplicants(jobId) {
             if (!r[0]) { toast('That role no longer exists.', 'err'); go('#/'); return; }
             A.job = r[0]; A.steps = r[1]; A.list = r[2];
             $('appTitleBar').textContent = A.job.title;
+            renderRoleTabs(A.job, 'applicants');
             var ids = A.list.map(function (a) { return a.id; });
             return Promise.all([
                 HiringApi.responseSteps(ids), HiringApi.listStarts(ids)
@@ -928,7 +960,6 @@ $('appList').addEventListener('change', function (e) {
 });
 
 $('btnAppBack').addEventListener('click', function () { go('#/'); });
-$('btnAppEdit').addEventListener('click', function () { if (S.app.job) go('#/j/' + S.app.job.id); });
 
 /* ---- one applicant ---- */
 
@@ -1109,4 +1140,6 @@ $('dDelete').addEventListener('click', function () {
 
 /* ==================================================================== boot */
 
-route();
+/* After every script on the page has loaded, so the routes that sourcing.js
+ * serves are there on the first visit too. */
+document.addEventListener('DOMContentLoaded', route);

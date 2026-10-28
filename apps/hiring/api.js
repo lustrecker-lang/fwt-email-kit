@@ -300,7 +300,16 @@ var HiringApi = (function () {
      * onProgress(done, total) reports applicants whose files are cleared. */
     function deleteJobCompletely(jobId, onProgress) {
         function attempt() {
-            return staff('hiring_applicants?select=id,token&job_id=eq.' + q(jobId)).then(function (apps) {
+            /* Sourced people's pictures first. Their rows go with the role, and
+             * after that nothing says which folders were theirs. */
+            return staff('hiring_prospects?select=id&job_id=eq.' + q(jobId)).catch(function () { return []; })
+                .then(function (ps) {
+                    var chain = Promise.resolve();
+                    ps.forEach(function (p) { chain = chain.then(function () { return removeFolder(PROSPECT_BUCKET, p.id); }); });
+                    return chain;
+                }).then(function () {
+                    return staff('hiring_applicants?select=id,token&job_id=eq.' + q(jobId));
+                }).then(function (apps) {
                 var queue = apps.slice(), done = 0, total = apps.length;
                 /* A few folders at a time: one by one is slow on a busy role, all
                  * at once is a burst of hundreds of requests. */
@@ -417,6 +426,298 @@ var HiringApi = (function () {
         return Backend.uploadFile(file, 'video', MEDIA_BUCKET, onProgress);
     }
 
+    /* --------------------------------------------------------------- sourcing */
+
+    /* Photos and screenshots of sourced people. Private: opened through signed
+     * links, in a folder named after the prospect's id. */
+    var PROSPECT_BUCKET = 'hiring-prospects';
+
+    var PROSPECT_STAGES = [
+        { key: 'discovered', label: 'Found',      tone: '' },
+        { key: 'enriched',   label: 'Found',      tone: '' },
+        { key: 'scored',     label: 'Scored',     tone: '' },
+        { key: 'queued',     label: 'To review',  tone: 'look' },
+        { key: 'maybe',      label: 'Maybe',      tone: 'look' },
+        { key: 'passed',     label: 'Passed',     tone: 'no' },
+        { key: 'reach_out',  label: 'To contact', tone: 'go' },
+        { key: 'contacted',  label: 'Contacted',  tone: 'go' },
+        { key: 'replied',    label: 'Replied',    tone: 'go' },
+        { key: 'declined',   label: 'Declined',   tone: 'no' },
+        { key: 'applied',    label: 'Applied',    tone: 'go' },
+        { key: 'dropped',    label: 'Dropped',    tone: '' }
+    ];
+
+    var SOURCES = [
+        { key: 'linkedin',  label: 'LinkedIn profiles, through search results' },
+        { key: 'github',    label: 'GitHub' },
+        { key: 'portfolio', label: 'Portfolio and personal sites' },
+        { key: 'similar',   label: 'People similar to those you picked' }
+    ];
+
+    var SOURCE_LABELS = {
+        linkedin: 'LinkedIn search', github: 'GitHub', portfolio: 'Portfolio search',
+        similar: 'Similar to a pick', web: 'Web search', manual: 'Added by hand', inbound: 'Applied'
+    };
+
+    var CARD_SHOWS = [
+        { key: 'screenshots', label: 'Screenshots of their work' },
+        { key: 'github',      label: 'GitHub activity' },
+        { key: 'writing',     label: 'Writing and talks' }
+    ];
+
+    /* What a role's sourcing starts as, before anyone has saved it. Mirrors the
+     * column defaults in hiring_sourcing. */
+    function defaultSourcing(jobId) {
+        return {
+            job_id: jobId, enabled: false, cards_per_week: 12, weekly_budget: 60,
+            archetypes: [], examples: [], regions: [], base_timezone: '', overlap_hours: 0,
+            sources: ['linkedin', 'github', 'portfolio'], skip: [], card_shows: ['screenshots'],
+            swipers: [], outreach_by: [], message: DEFAULT_MESSAGE
+        };
+    }
+
+    var DEFAULT_MESSAGE = 'Hi {{first_name}},\n\n' +
+        '{{personal_line}}\n\n' +
+        'We are hiring a {{role}} at {{company}}, and I think you could be a great fit. ' +
+        'Everything about the role, and a short case study, is here:\n\n' +
+        '{{apply_link}}\n\n' +
+        '{{signature}}';
+
+    /* Fills an outreach message. Unlike `fill`, which knows the three applicant
+     * email words, this takes whatever the caller hands it; a word it is not
+     * given is left as it was, so a gap is visible rather than silently blank.
+     * A line that ends up empty (no personal line yet) is dropped with the blank
+     * line after it. */
+    function fillMessage(text, vars) {
+        return String(text || '').replace(/\{\{\s*(\w+)\s*\}\}/g, function (m, k) {
+            return Object.prototype.hasOwnProperty.call(vars, k) && vars[k] != null ? String(vars[k]) : m;
+        }).replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    function getSettings() {
+        return staff('hiring_settings?select=*').then(function (rows) { return rows[0] || null; });
+    }
+
+    function saveSettings(s) {
+        return staff('hiring_settings?id=eq.true', 'PATCH', {
+            company: s.company, about: s.about, signature: s.signature, pass_reasons: s.pass_reasons,
+            sourcing_admins: s.sourcing_admins, monthly_limit: s.monthly_limit, keep_passed_days: s.keep_passed_days
+        }, 'return=representation').then(function (rows) { return rows[0]; });
+    }
+
+    function getSourcing(jobId) {
+        return staff('hiring_sourcing?select=*&job_id=eq.' + q(jobId)).then(function (rows) {
+            return rows[0] || null;
+        });
+    }
+
+    function saveSourcing(s) {
+        var body = {
+            job_id: s.job_id, enabled: !!s.enabled, cards_per_week: s.cards_per_week, weekly_budget: s.weekly_budget,
+            archetypes: s.archetypes, examples: s.examples, regions: s.regions, base_timezone: s.base_timezone,
+            overlap_hours: s.overlap_hours, sources: s.sources, skip: s.skip, card_shows: s.card_shows,
+            swipers: s.swipers, outreach_by: s.outreach_by, message: s.message,
+            updated_by: Backend.currentEmail()
+        };
+        return staff('hiring_sourcing?on_conflict=job_id', 'POST', body,
+            'resolution=merge-duplicates,return=representation').then(function (rows) { return rows[0]; });
+    }
+
+    /* Every version of a role's criteria, newest first. A card scored against an
+     * older version needs that version's labels, not today's. */
+    function listCriteria(jobId) {
+        return staff('hiring_criteria?select=*&order=version.desc&job_id=eq.' + q(jobId));
+    }
+
+    /* The newest version of a role's criteria, or null when it has none yet. */
+    function getCriteria(jobId) {
+        return staff('hiring_criteria?select=*&order=version.desc&limit=1&job_id=eq.' + q(jobId))
+            .then(function (rows) { return rows[0] || null; });
+    }
+
+    /* Criteria are never edited in place: a change is a new version, so scores
+     * made against the old one still mean what they meant. Two people saving at
+     * once both aim for the same number, and the database refuses the second;
+     * trying again takes the next one. */
+    function saveCriteria(jobId, c, snapshot) {
+        function attempt(tries) {
+            return getCriteria(jobId).then(function (cur) {
+                return staff('hiring_criteria', 'POST', {
+                    job_id: jobId, version: cur ? cur.version + 1 : 1,
+                    must_haves: c.must_haves, criteria: c.criteria,
+                    description_snapshot: snapshot || '', created_by: Backend.currentEmail()
+                }, 'return=representation');
+            }).then(function (rows) { return rows[0]; }).catch(function (ex) {
+                if (tries > 0 && /duplicate key/i.test(ex && ex.message)) return attempt(tries - 1);
+                throw ex;
+            });
+        }
+        return attempt(2);
+    }
+
+    /* Everything the swipe and outreach screens draw, in one read. The token is
+     * left out here; outreach asks for it separately, when it builds a link. */
+    var PROSPECT_COLS = 'id,job_id,name,headline,company,location,timezone,years_experience,summary,experience,' +
+        'tags,personal_line,photo_path,screenshots,linkedin_url,portfolio_url,portfolio_embeds,github_url,product_url,stage,' +
+        'applicant_id,created_at,updated_at,' +
+        'hiring_prospect_scores(criteria_id,match,must_haves,scores,weakest,created_at),' +
+        'hiring_prospect_sources(source,query,found_at),' +
+        'hiring_decisions(id,decision,reasons,note,decided_by,decided_at),' +
+        'hiring_outreach(message,channel,status,sent_by,sent_at,replied_at,updated_at)';
+
+    function listProspects(jobId, stages) {
+        return staff('hiring_prospects?select=' + PROSPECT_COLS + '&order=created_at.asc&job_id=eq.' + q(jobId) +
+            (stages ? '&stage=in.(' + stages.map(q).join(',') + ')' : ''));
+    }
+
+    /* The personal-link tokens for some prospects: { prospectId: token }. */
+    function prospectTokens(ids) {
+        if (!ids.length) return Promise.resolve({});
+        return staff('hiring_prospects?select=id,token&id=in.(' + ids.map(q).join(',') + ')').then(function (rows) {
+            var out = {};
+            rows.forEach(function (r) { out[r.id] = r.token; });
+            return out;
+        });
+    }
+
+    /* How many prospects each role has at each stage, for the roles list:
+     * { jobId: { queued: 4, reach_out: 2, ... } }. */
+    function prospectCounts() {
+        return staff('hiring_prospects?select=job_id,stage').then(function (rows) {
+            var out = {};
+            rows.forEach(function (r) {
+                var c = out[r.job_id] || (out[r.job_id] = {});
+                c[r.stage] = (c[r.stage] || 0) + 1;
+            });
+            return out;
+        }).catch(function () { return {}; });
+    }
+
+    /* The most recent search run for a role, or null when none has run. */
+    function lastRun(jobId) {
+        return staff('hiring_agent_runs?select=*&order=started_at.desc&limit=1&job_id=eq.' + q(jobId))
+            .then(function (rows) { return rows[0] || null; }).catch(function () { return null; });
+    }
+
+    /* Makes sure a prospect has an outreach row, without touching one that is
+     * already there. */
+    function ensureOutreach(prospectId, message) {
+        return staff('hiring_outreach?on_conflict=prospect_id', 'POST', { prospect_id: prospectId, message: message || '' },
+            'resolution=ignore-duplicates,return=minimal');
+    }
+
+    /* Which roles have sourcing switched on: { jobId: true }. */
+    function sourcingFlags() {
+        return staff('hiring_sourcing?select=job_id,enabled&enabled=eq.true').then(function (rows) {
+            var out = {};
+            rows.forEach(function (r) { out[r.job_id] = true; });
+            return out;
+        }).catch(function () { return {}; });
+    }
+
+    /* A swipe. The database moves the prospect's stage when the decision lands.
+     * Reaching out also writes the outreach row with the message ready, unless
+     * one is already there (a second right-swipe keeps the first message). */
+    function decide(prospectId, decision, reasons, note, message) {
+        return staff('hiring_decisions', 'POST', {
+            prospect_id: prospectId, decision: decision, reasons: reasons || [],
+            note: note || null, decided_by: Backend.currentEmail()
+        }, 'return=representation').then(function (rows) {
+            var made = rows[0];
+            if (decision !== 'reach_out') return made;
+            return staff('hiring_outreach?on_conflict=prospect_id', 'POST',
+                { prospect_id: prospectId, message: message || '' },
+                'resolution=ignore-duplicates,return=minimal').then(function () { return made; });
+        });
+    }
+
+    /* Takes a swipe back. Removing the decision puts the stage back to what the
+     * one before it said (or to review). An outreach row that was never sent goes
+     * too; one that was sent stays, because that already happened. */
+    function undoDecision(d, prospectId) {
+        return staff('hiring_decisions?id=eq.' + q(d.id), 'DELETE', undefined, 'return=minimal').then(function () {
+            if (d.decision !== 'reach_out') return null;
+            return staff('hiring_outreach?prospect_id=eq.' + q(prospectId) + '&status=eq.ready',
+                'DELETE', undefined, 'return=minimal');
+        });
+    }
+
+    /* Adds the reasons to a pass after the fact: the card is already gone when
+     * they are picked. */
+    function updateDecision(id, patch) {
+        return staff('hiring_decisions?id=eq.' + q(id), 'PATCH', patch, 'return=minimal');
+    }
+
+    function updateOutreach(prospectId, patch) {
+        return staff('hiring_outreach?prospect_id=eq.' + q(prospectId), 'PATCH', patch, 'return=minimal');
+    }
+
+    /* Signed links for many prospect files at once: { path: url }. One request
+     * for a whole deck of cards rather than one per picture. An hour, so a screen
+     * left open while someone works through the queue keeps its pictures. */
+    function prospectFileUrls(paths) {
+        paths = paths.filter(Boolean);
+        if (!paths.length) return Promise.resolve({});
+        return authed(function () {
+            return fetch(SUPABASE.url + '/storage/v1/object/sign/' + PROSPECT_BUCKET, {
+                method: 'POST',
+                headers: headers({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ expiresIn: 3600, paths: paths })
+            });
+        }).then(check).then(function (rows) {
+            var out = {};
+            (rows || []).forEach(function (r) {
+                var u = r && (r.signedURL || r.signedUrl);
+                if (!u) return;
+                out[r.path] = u.indexOf('/storage/v1') === 0 ? SUPABASE.url + u : SUPABASE.url + '/storage/v1' + u;
+            });
+            return out;
+        }).catch(function () { return {}; });
+    }
+
+    /* A prospect and their pictures. Pictures first, for the same reason as an
+     * applicant's files: once the row is gone nothing records the folder. */
+    function deleteProspect(id) {
+        return removeFolder(PROSPECT_BUCKET, id).then(function () {
+            return staff('hiring_prospects?id=eq.' + q(id), 'DELETE', undefined, 'return=minimal');
+        });
+    }
+
+    /* Clears passed and dropped prospects untouched for `days`, across every
+     * role. Returns how many went. Done from here rather than in SQL because the
+     * pictures have to go through the storage API. */
+    function purgeProspects(days) {
+        var cutoff = new Date(Date.now() - days * 86400000).toISOString();
+        return staff('hiring_prospects?select=id&stage=in.(passed,dropped)&updated_at=lt.' + q(cutoff))
+            .then(function (rows) {
+                var chain = Promise.resolve();
+                rows.forEach(function (r) { chain = chain.then(function () { return deleteProspect(r.id); }); });
+                return chain.then(function () { return rows.length; });
+            });
+    }
+
+    /* Asks the hiring-ai Edge Function to draft a role's criteria from its
+     * description. Returns { must_haves, criteria, archetypes, card_shows }; it
+     * saves nothing, so the person can read it and change it first. */
+    function draftCriteria(jobId) {
+        return authed(function () {
+            return fetch(SUPABASE.url + '/functions/v1/hiring-ai', {
+                method: 'POST',
+                headers: headers({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ action: 'draft_criteria', job_id: jobId })
+            });
+        }).then(function (r) {
+            return r.json().catch(function () { return {}; }).then(function (j) {
+                if (r.ok) return j;
+                var msg = j.error || j.message || ('The draft could not be made (' + r.status + ').');
+                if (r.status === 404 && /function was not found/i.test(j.message || '')) {
+                    msg = 'The AI function is not set up yet. Deploy supabase/functions/hiring-ai (see the README).';
+                }
+                throw new Error(msg);
+            });
+        });
+    }
+
     /* ------------------------------------------------- the public (applicant) side */
 
     function anonGet(path) {
@@ -454,8 +755,12 @@ var HiringApi = (function () {
             q(jobId));
     }
 
-    function apply(slug, name, email) {
-        return Backend.rpc('hiring_apply', { p_slug: slug, p_name: name, p_email: email }, true);
+    /* `ref` is the token from a sourced person's personal link, when there is
+     * one; it joins the application to them. */
+    function apply(slug, name, email, ref) {
+        var args = { p_slug: slug, p_name: name, p_email: email };
+        if (ref) args.p_ref = ref;
+        return Backend.rpc('hiring_apply', args, true);
     }
 
     function progress(token) {
@@ -514,6 +819,35 @@ var HiringApi = (function () {
         deleteJobCompletely: deleteJobCompletely,
         listSteps: listSteps,
         saveSteps: saveSteps,
+        PROSPECT_STAGES: PROSPECT_STAGES,
+        SOURCES: SOURCES,
+        SOURCE_LABELS: SOURCE_LABELS,
+        CARD_SHOWS: CARD_SHOWS,
+        DEFAULT_MESSAGE: DEFAULT_MESSAGE,
+        defaultSourcing: defaultSourcing,
+        fillMessage: fillMessage,
+        getSettings: getSettings,
+        saveSettings: saveSettings,
+        getSourcing: getSourcing,
+        saveSourcing: saveSourcing,
+        listCriteria: listCriteria,
+        getCriteria: getCriteria,
+        saveCriteria: saveCriteria,
+        listProspects: listProspects,
+        prospectTokens: prospectTokens,
+        prospectCounts: prospectCounts,
+        sourcingFlags: sourcingFlags,
+        lastRun: lastRun,
+        ensureOutreach: ensureOutreach,
+        decide: decide,
+        undoDecision: undoDecision,
+        updateDecision: updateDecision,
+        updateOutreach: updateOutreach,
+        prospectFileUrls: prospectFileUrls,
+        deleteProspect: deleteProspect,
+        purgeProspects: purgeProspects,
+        draftCriteria: draftCriteria,
+
         listApplicants: listApplicants,
         responseSteps: responseSteps,
         listStarts: listStarts,

@@ -112,6 +112,9 @@ var root = document.getElementById('root');
 var params = new URLSearchParams(location.search);
 var SLUG = params.get('job') || '';
 var PREVIEW = params.get('preview') === '1' && Backend.isSignedIn();
+/* Set when someone we went looking for opens the personal link we sent them.
+ * Passed along when they start, so their application joins up with that. */
+var REF = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.get('ref') || '') ? params.get('ref') : '';
 var TOKEN_KEY = 'fwt-hiring-token:' + SLUG;
 var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -271,7 +274,7 @@ function showIntro() {
 
         var btn = document.getElementById('startGo');
         btn.disabled = true; btn.textContent = 'Starting\u2026';
-        HiringApi.apply(SLUG, name, email).then(function (token) {
+        HiringApi.apply(SLUG, name, email, REF).then(function (token) {
             keepToken(token);
             /* Their personal link, by email. Not waited for: the application
              * carries on whether or not it arrives. */

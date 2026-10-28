@@ -691,6 +691,86 @@ in the Supabase dashboard from time to time. The time limit starts when
 an applicant presses the button, not when you open the role, so someone can look
 at a timed step's title and duration and come back to it days later.
 
+
+### Sourcing
+
+A role can also go looking for people instead of only waiting for them. Each
+saved role has tabs under its title: **Role and funnel** (the editor above),
+**Swipe**, **Outreach**, **Applicants**, and **Sourcing** last, because it is set
+once and left alone.
+
+**Sourcing** is where a role says what it wants. **Draft from description**
+asks Claude to read the job description (and the company text in Settings) and
+write a first version of:
+
+- **Must-haves.** Fail one and the person never reaches the swipe screen.
+- **Scored criteria** with weights adding up to 100. These are the bars on each
+  card. Visual taste is never one of them; the person swiping judges that from
+  the work.
+- **Who to look for**, in words ("government digital service alumni"), and
+  optional example portfolios of what good or bad looks like.
+
+Nothing is saved until **Save**. The same tab sets where to search (regions,
+timezone overlap, sources, who never to bring back), what the card leads with
+(screenshots, GitHub, writing), who swipes and who reaches out, the first
+message, and a weekly budget. Criteria are versioned: every change is a new
+version, and a card scored against an older one says so. When the description
+changes after the criteria were written, the tab says that too.
+
+**Swipe** is a stack of cards, made for a phone. Each card shows their work
+(tap the picture for the next one), their name, title, city and years, the match,
+a short summary, a small bar per criterion, **Open portfolio** and **More info**.
+**Open portfolio** shows the live site in a large sheet, with the same three
+choices along its bottom and a link to open it in a new tab. A site that refuses
+to be shown inside another page (the search marks these) opens in a tab instead.
+Drag right (or the tick) to reach out, left (or the cross) to pass, or press
+**Later** to send the card to the back of the stack, behind everything new, until
+it comes round again. On a computer the arrow keys do the same (right, left,
+down), with P for the portfolio, I for more info and Z to undo. Tapping the bars
+opens a sheet with each score's evidence and the must-haves; **More info** opens
+one with the rest: links, experience, every screenshot, tools, and how they were
+found. After a pass, the quick reasons from Settings appear for a few seconds;
+picking one is optional. Passed people leave the stack. Reaching out writes the
+message from the role's template, with the person's own link in it, and moves
+them to Outreach.
+
+**Outreach** is the list for whoever sends the messages. Each person has the
+message (editable), their personal link (`apply.html?job=<slug>&ref=<token>`),
+and buttons to mark it sent on LinkedIn or by email, then replied or declined.
+When someone opens their link and starts, they are marked **Applied** on their
+own and appear in **Applicants** like anyone else.
+
+**Settings** (the gear on the roles list) holds what every role shares: the
+company name and description, the outreach signature, the pass reasons, who may
+switch the search on, a monthly limit across all roles, and how long passed
+candidates are kept. **Clear old passed candidates now** deletes them, with
+their pictures.
+
+**What fills the swipe screen.** A weekly search agent, which is the next piece
+of work and is not in this repository yet. It writes into `hiring_prospects`
+and the tables beside it; the database keeps one row per person per role (by
+LinkedIn handle, GitHub username or portfolio address), and the stage moves on
+its own as decisions and outreach are recorded. Until the agent exists, the
+switch on the Sourcing tab is saved but nothing searches.
+
+Setup:
+
+1. **SQL:** run `supabase/hiring.sql` again. It adds the sourcing tables, the
+   `hiring-prospects` bucket (private, images only), and the `ref` argument on
+   `hiring_apply`.
+2. **Function:** Edge Functions > Deploy a new function > Via editor. Name it
+   `hiring-ai`, paste `supabase/functions/hiring-ai/index.ts`, keep **Verify
+   JWT on**, and deploy.
+3. **Secret:** add `ANTHROPIC_API_KEY` (from console.anthropic.com) under Edge
+   Functions > Secrets. Only **Draft from description** needs it; everything
+   else works without it.
+4. **Settings:** open the gear on the roles list and fill in the company.
+
+**Privacy.** Sourced people have not applied, so nothing about them is public:
+every sourcing table is staff-only, and their pictures are opened through
+signed links. Keep only what the card needs, clear passed candidates on the
+schedule in Settings, and delete anyone who asks.
+
 ---
 
 ## Files
@@ -708,8 +788,10 @@ Each tool lives in its own folder under `apps/` and loads what it needs from
 | `public/` | Static images. |
 | `shared/ui.css`, `shared/ui.js` | Interface primitives for new tools: form controls, app bar, tables, dialogs, toasts, and the `UI` helpers (`toast`, `ask`, `esc`, `paras`, `slugify`). The email page still carries its own inline copy of the CSS. |
 | `apps/hiring/index.html`, `app.js` | The hiring tool, staff side: roles, the funnel editor, and the applicant list. See [Hiring Kit](#hiring-kit). |
+| `apps/hiring/sourcing.js` | The sourcing screens: a role's Sourcing tab, Swipe, Outreach, and Settings. See [Sourcing](#sourcing). |
 | `apps/hiring/apply.html` | The public page an applicant uses. Needs no account. |
-| `apps/hiring/api.js` | The hiring tool's tables and applicant functions. Defines `HiringApi`. |
+| `apps/hiring/api.js` | The hiring tool's tables, applicant functions and sourcing reads and writes. Defines `HiringApi`. |
+| `supabase/functions/hiring-ai/index.ts` | The Edge Function that asks Claude to draft a role's sourcing criteria from its description. Reads `ANTHROPIC_API_KEY` from Supabase secrets and saves nothing. |
 | `supabase/functions/hiring-email/index.ts` | The Edge Function that sends staff-triggered applicant emails (rejection) through Resend. Holds no key itself; reads `RESEND_API_KEY` from Supabase secrets. |
 | `supabase/functions/hiring-notify/index.ts` | The Edge Function that sends the applicant's own "started" and "submitted" emails, once each. Called from the apply page with the applicant's token. |
 | `apps/email/index.html` | The composer. Build, theme, upload, save, export. Nothing brand-specific lives here. |
@@ -719,7 +801,7 @@ Each tool lives in its own folder under `apps/` and loads what it needs from
 | `apps/email/sample.js` | Preview filler, and the example values for every merge field. |
 | `apps/email/api.js` | The email tool's tables: templates, brands, organisations. Built on `Backend`. Defines `Api`. |
 | `supabase/schema.sql` | The email tool's backend: its tables, policies and bucket. |
-| `supabase/hiring.sql` | The hiring tool's backend: jobs, steps, applicants, responses, step clocks, the applicant functions and three buckets (documents, applicant videos, brief videos). Run it in the same Supabase project. Unlike the email tables, nothing here is publicly readable except open jobs and their steps. |
+| `supabase/hiring.sql` | The hiring tool's backend: jobs, steps, applicants, responses, step clocks, the applicant functions and three buckets (documents, applicant videos, brief videos). Also the sourcing tables (settings, per-role sourcing, criteria, prospects and their scores, decisions and outreach) and a fourth bucket for prospects' pictures. Run it in the same Supabase project. Unlike the email tables, nothing here is publicly readable except open jobs and their steps. |
 
 The signed-in session is stored under `fwt-tools-session`. A session saved under
 the old `egovern-email-kit-session` key is moved across on first load.

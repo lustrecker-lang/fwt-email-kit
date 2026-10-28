@@ -38,6 +38,15 @@
 --   hiring_save_step refuses a timed step that was never started or that is past
 --   its deadline, so the countdown on the page is a courtesy and this is the rule.
 --
+-- SOURCING
+--
+--   A role can also go looking for people instead of waiting for them. The
+--   tables at the end of this file hold that side: who was found (prospects),
+--   where, how well they match the role's criteria, what staff decided on the
+--   swipe screen, and the outreach that followed. A prospect becomes an applicant
+--   when they open their personal link (apply.html?job=<slug>&ref=<token>) and
+--   start, and hiring_apply joins the two. None of it is public.
+--
 -- RE-RUNNING THIS FILE on a database that already has an earlier version is
 -- safe and brings it up to date: it adds the time limit column and table, closes
 -- the public read on steps, and replaces the functions.
@@ -445,7 +454,17 @@ create policy "Signed-in users can delete step starts"
 -- Resuming would hand someone else's progress to anybody who typed their address,
 -- so continuing is only possible with the token. The cost is that this message
 -- confirms an address has applied to this job.
-create or replace function hiring_apply(p_slug text, p_name text, p_email text)
+--
+-- p_ref is the token from a sourced person's personal link. When it matches a
+-- prospect on this role who has not applied yet, the two are joined and the
+-- prospect is marked applied. A ref that matches nothing is ignored without a
+-- word, so the link cannot be used to test whether a token exists.
+--
+-- The three-argument version is dropped first: left in place beside this one,
+-- a call naming only the first three arguments would match both.
+drop function if exists hiring_apply(text, text, text);
+
+create or replace function hiring_apply(p_slug text, p_name text, p_email text, p_ref uuid default null)
 returns uuid
 language plpgsql
 security definer
@@ -455,6 +474,7 @@ declare
     v_job   hiring_jobs%rowtype;
     v_name  text := btrim(coalesce(p_name, ''));
     v_email text := lower(btrim(coalesce(p_email, '')));
+    v_id    uuid;
     v_token uuid;
 begin
     select * into v_job from hiring_jobs where slug = p_slug and status = 'open';
@@ -478,10 +498,16 @@ begin
     begin
         insert into hiring_applicants (job_id, name, email)
         values (v_job.id, v_name, v_email)
-        returning token into v_token;
+        returning id, token into v_id, v_token;
     exception when unique_violation then
         raise exception 'This email has already applied. Use the link you were given to continue.';
     end;
+
+    if p_ref is not null then
+        update hiring_prospects
+        set applicant_id = v_id, stage = 'applied'
+        where token = p_ref and job_id = v_job.id and applicant_id is null;
+    end if;
 
     return v_token;
 end $$;
@@ -783,14 +809,14 @@ as $$
 $$;
 
 -- Functions are executable by everyone unless told otherwise.
-revoke execute on function hiring_apply(text, text, text)        from public;
+revoke execute on function hiring_apply(text, text, text, uuid)  from public;
 revoke execute on function hiring_outline(text)                 from public;
 revoke execute on function hiring_progress(uuid)                 from public;
 revoke execute on function hiring_open_step(uuid, uuid, boolean) from public;
 revoke execute on function hiring_save_step(uuid, uuid, jsonb)   from public;
 revoke execute on function hiring_valid_token(text)              from public;
 
-grant execute on function hiring_apply(text, text, text)         to anon, authenticated;
+grant execute on function hiring_apply(text, text, text, uuid)   to anon, authenticated;
 grant execute on function hiring_outline(text)                  to anon, authenticated;
 grant execute on function hiring_progress(uuid)                  to anon, authenticated;
 grant execute on function hiring_open_step(uuid, uuid, boolean)  to anon, authenticated;
@@ -878,3 +904,434 @@ drop policy if exists "Signed-in users can upload hiring media" on storage.objec
 create policy "Signed-in users can upload hiring media"
     on storage.objects for insert to authenticated
     with check (bucket_id = 'hiring-media');
+
+-- ================================================================= SOURCING
+-- Finding people for a role, rather than waiting for them to apply.
+--
+--   hiring_settings          one row: what every role shares (about the company,
+--                            pass reasons, who may switch sourcing on, limits)
+--   hiring_sourcing          one row per role: where to look, what the card shows,
+--                            who swipes, the outreach message, the weekly budget
+--   hiring_criteria          what a good match is for a role, versioned: every
+--                            edit is a new row, so old scores keep their meaning
+--   hiring_agent_runs        one row per search run, so every prospect can say
+--                            which run found it
+--   hiring_prospects         a person found for a role, and where they stand
+--   hiring_prospect_sources  how a prospect was found (a person can be found by
+--                            more than one search)
+--   hiring_prospect_scores   a prospect scored against one version of the criteria
+--   hiring_decisions         what staff decided on the swipe screen, and why
+--   hiring_outreach          the message to a prospect and whether it went
+--
+-- The settings live in their own tables and not as columns on hiring_jobs on
+-- purpose: an open job is readable by the public, column for column.
+--
+-- A PROSPECT'S STAGE moves forward like this:
+--
+--     discovered -> enriched -> scored -> queued        (the search agent)
+--     queued -> passed | maybe | reach_out              (the swipe screen)
+--     reach_out -> contacted -> replied | declined      (outreach)
+--     any of the above -> applied                       (hiring_apply, via the link)
+--
+-- Decisions and outreach move it through triggers below, so the stage cannot
+-- drift from what was actually recorded. Once someone applies, the applicant row
+-- takes over and the prospect's stage stays 'applied'.
+--
+-- WHO IS THE SAME PERSON. Every prospect has its own id. The LinkedIn handle, the
+-- GitHub username and the portfolio address are cleaned into key columns that the
+-- database derives itself, and each is unique within a role, so the same person
+-- cannot be added to a role twice whichever of their links is found first.
+--
+-- Files (photos and screenshots of work) go in the private hiring-prospects
+-- bucket under a folder named after the prospect's id, and staff open them
+-- through signed links.
+
+create table if not exists hiring_settings (
+    -- Always true: there is exactly one row.
+    id               boolean primary key default true check (id),
+    company          text not null default '' check (length(company) <= 120),
+    -- What the company does, in a few paragraphs. Every role's search and scoring
+    -- reads it, so nobody has to write it into each job description.
+    about            text not null default '' check (length(about) <= 5000),
+    signature        text not null default '' check (length(signature) <= 1000),
+    pass_reasons     text[] not null default array[
+                         'Visual taste', 'Not a builder', 'Too junior', 'Too senior',
+                         'Agency or brand only', 'Big-company only', 'Concept work, not shipped',
+                         'Wrong region or timezone'
+                     ],
+    -- Emails of the people who may switch sourcing on for a role and change the
+    -- limits below. Empty means any signed-in member of staff.
+    sourcing_admins  text[] not null default '{}',
+    -- The most people the search agent may check in a month, across every role.
+    monthly_limit    integer not null default 400 check (monthly_limit between 0 and 10000),
+    -- Passed and dropped prospects are cleared after this many days.
+    keep_passed_days integer not null default 180 check (keep_passed_days between 30 and 730),
+    updated_at       timestamptz not null default now()
+);
+
+insert into hiring_settings (id) values (true) on conflict (id) do nothing;
+
+create table if not exists hiring_sourcing (
+    job_id         uuid primary key references hiring_jobs (id) on delete cascade,
+    enabled        boolean not null default false,
+    cards_per_week integer not null default 12 check (cards_per_week between 1 and 50),
+    -- How many people the agent may check for this role in a week. Most are
+    -- dropped; the best cards_per_week reach the swipe screen.
+    weekly_budget  integer not null default 60 check (weekly_budget between 5 and 500),
+    -- The kinds of people to look for, in words: "design engineers at startups".
+    -- Drafted from the description with the criteria, then edited by hand.
+    archetypes     text[] not null default '{}',
+    -- Real people or portfolios that show what good (or bad) looks like:
+    -- [{ "url": "...", "kind": "ideal" | "avoid", "note": "..." }]
+    examples       jsonb not null default '[]'::jsonb check (jsonb_typeof(examples) = 'array'),
+    regions        text[] not null default '{}',
+    base_timezone  text not null default '' check (length(base_timezone) <= 40),
+    overlap_hours  integer not null default 0 check (overlap_hours between 0 and 12),
+    -- Where to search: linkedin (profiles through search results), github,
+    -- portfolio (personal sites), similar (people like those swiped right).
+    sources        text[] not null default array['linkedin', 'github', 'portfolio'],
+    -- Companies or people never to bring back: clients, our own staff.
+    skip           text[] not null default '{}',
+    -- What the card leads with: screenshots, github, writing.
+    card_shows     text[] not null default array['screenshots'],
+    swipers        text[] not null default '{}',    -- emails
+    outreach_by    text[] not null default '{}',    -- emails
+    -- The first message, with {{first_name}}, {{personal_line}}, {{role}},
+    -- {{company}}, {{apply_link}} and {{signature}} filled in per person.
+    message        text not null default '' check (length(message) <= 5000),
+    updated_by     text,
+    updated_at     timestamptz not null default now()
+);
+
+create table if not exists hiring_criteria (
+    id                   uuid primary key default gen_random_uuid(),
+    job_id               uuid not null references hiring_jobs (id) on delete cascade,
+    version              integer not null check (version >= 1),
+    -- Fail one and the prospect never reaches the swipe screen:
+    -- [{ "key": "years", "label": "8+ years of craft experience" }]
+    must_haves           jsonb not null default '[]'::jsonb check (jsonb_typeof(must_haves) = 'array'),
+    -- What the bars on the card show, weights adding up to 100:
+    -- [{ "key": "prototypes", "label": "...", "weight": 25, "hint": "what counts as evidence" }]
+    criteria             jsonb not null default '[]'::jsonb check (jsonb_typeof(criteria) = 'array'),
+    -- The description these were written against, so the app can say when the
+    -- description has changed since.
+    description_snapshot text not null default '',
+    created_by           text,
+    created_at           timestamptz not null default now(),
+    unique (job_id, version)
+);
+
+create table if not exists hiring_agent_runs (
+    id          uuid primary key default gen_random_uuid(),
+    job_id      uuid not null references hiring_jobs (id) on delete cascade,
+    kind        text not null default 'weekly' check (kind in ('weekly', 'manual')),
+    status      text not null default 'running' check (status in ('running', 'done', 'failed')),
+    criteria_id uuid references hiring_criteria (id) on delete set null,
+    -- Counts the run keeps as it goes: { "searched": 40, "found": 31, "queued": 12 }
+    stats       jsonb not null default '{}'::jsonb check (jsonb_typeof(stats) = 'object'),
+    note        text,
+    started_at  timestamptz not null default now(),
+    finished_at timestamptz
+);
+
+create index if not exists hiring_agent_runs_job_idx on hiring_agent_runs (job_id, started_at desc);
+
+-- The keys a person is matched on, cleaned out of their links. immutable so the
+-- database can store them as generated columns and index them.
+create or replace function hiring_linkedin_key(u text)
+returns text language sql immutable as $$
+    select nullif(lower((regexp_match(coalesce(u, ''), 'linkedin\.com/in/([^/?#[:space:]]+)', 'i'))[1]), '');
+$$;
+
+create or replace function hiring_github_key(u text)
+returns text language sql immutable as $$
+    select nullif(lower((regexp_match(coalesce(u, ''), 'github\.com/([a-z0-9][a-z0-9-]*)', 'i'))[1]), '');
+$$;
+
+-- A portfolio is its host without www: maria.design, maria.framer.website. On a
+-- host many people share (behance.net/maria), the first part of the path is the
+-- person, so it is kept.
+create or replace function hiring_portfolio_key(u text)
+returns text language sql immutable as $$
+    select case
+        when m is null then null
+        when m[1] in ('behance.net', 'dribbble.com', 'read.cv', 'medium.com', 'notion.so', 'notion.site',
+                      'linktr.ee', 'x.com', 'twitter.com', 'instagram.com', 'github.com', 'linkedin.com',
+                      'cargo.site', 'contra.com', 'layers.to', 'substack.com')
+             then case when m[2] is null then null else m[1] || '/' || m[2] end
+        else m[1]
+    end
+    from (select regexp_match(lower(btrim(coalesce(u, ''))),
+        '^(?:https?://)?(?:www\.)?([^/?#:[:space:]]+\.[^/?#:[:space:]]+)(?::[0-9]+)?(?:/([^/?#[:space:]]+))?') as m) x;
+$$;
+
+create table if not exists hiring_prospects (
+    id               uuid primary key default gen_random_uuid(),
+    job_id           uuid not null references hiring_jobs (id) on delete cascade,
+    name             text not null check (length(name) between 1 and 200),
+    headline         text check (length(headline) <= 200),     -- current title
+    company          text check (length(company) <= 200),
+    location         text check (length(location) <= 200),
+    timezone         text check (length(timezone) <= 40),
+    years_experience integer check (years_experience between 0 and 60),
+    summary          text check (length(summary) <= 2000),
+    -- [{ "title": "...", "company": "...", "start": "2018", "end": "now" }], newest first
+    experience       jsonb not null default '[]'::jsonb check (jsonb_typeof(experience) = 'array'),
+    tags             text[] not null default '{}',
+    -- One sentence about their work, for the opening line of the outreach message.
+    personal_line    text check (length(personal_line) <= 500),
+    photo_path       text,
+    -- [{ "path": "<prospect id>/<file>", "url": "page it shows", "caption": "..." }], up to three
+    screenshots      jsonb not null default '[]'::jsonb check (jsonb_typeof(screenshots) = 'array'),
+    linkedin_url     text check (linkedin_url is null or linkedin_url ~* '^https://'),
+    portfolio_url    text check (portfolio_url is null or portfolio_url ~* '^https://'),
+    github_url       text check (github_url is null or github_url ~* '^https://'),
+    product_url      text check (product_url is null or product_url ~* '^https://'),
+    stage            text not null default 'discovered'
+                     check (stage in ('discovered', 'enriched', 'scored', 'queued', 'passed', 'maybe',
+                                      'reach_out', 'contacted', 'replied', 'declined', 'applied', 'dropped')),
+    -- What goes in their personal link. Like an applicant's token, it is never
+    -- shown in a list.
+    token            uuid not null unique default gen_random_uuid(),
+    applicant_id     uuid references hiring_applicants (id) on delete set null,
+    created_at       timestamptz not null default now(),
+    updated_at       timestamptz not null default now()
+);
+
+-- Whether the portfolio lets itself be shown inside another page. The search
+-- checks it; false sends the swipe screen's portfolio button straight to a new
+-- tab, and null (not checked) tries the sheet first.
+alter table hiring_prospects add column if not exists portfolio_embeds boolean;
+
+alter table hiring_prospects add column if not exists linkedin_key text
+    generated always as (hiring_linkedin_key(linkedin_url)) stored;
+alter table hiring_prospects add column if not exists github_key text
+    generated always as (hiring_github_key(github_url)) stored;
+alter table hiring_prospects add column if not exists portfolio_key text
+    generated always as (hiring_portfolio_key(portfolio_url)) stored;
+
+create unique index if not exists hiring_prospects_linkedin_idx
+    on hiring_prospects (job_id, linkedin_key) where linkedin_key is not null;
+create unique index if not exists hiring_prospects_github_idx
+    on hiring_prospects (job_id, github_key) where github_key is not null;
+create unique index if not exists hiring_prospects_portfolio_idx
+    on hiring_prospects (job_id, portfolio_key) where portfolio_key is not null;
+create index if not exists hiring_prospects_job_stage_idx on hiring_prospects (job_id, stage);
+
+create table if not exists hiring_prospect_sources (
+    id          uuid primary key default gen_random_uuid(),
+    prospect_id uuid not null references hiring_prospects (id) on delete cascade,
+    run_id      uuid references hiring_agent_runs (id) on delete set null,
+    source      text not null check (source in ('linkedin', 'github', 'portfolio', 'similar', 'web', 'manual', 'inbound')),
+    query       text check (length(query) <= 1000),
+    found_at    timestamptz not null default now()
+);
+
+create index if not exists hiring_prospect_sources_prospect_idx on hiring_prospect_sources (prospect_id);
+
+create table if not exists hiring_prospect_scores (
+    id          uuid primary key default gen_random_uuid(),
+    prospect_id uuid not null references hiring_prospects (id) on delete cascade,
+    criteria_id uuid not null references hiring_criteria (id) on delete cascade,
+    match       integer not null check (match between 0 and 100),
+    -- [{ "key": "years", "pass": true, "evidence": "11 years, 2014 to now" }]
+    must_haves  jsonb not null default '[]'::jsonb check (jsonb_typeof(must_haves) = 'array'),
+    -- [{ "key": "prototypes", "score": 9, "evidence": "...", "source_url": "https://..." }]
+    scores      jsonb not null default '[]'::jsonb check (jsonb_typeof(scores) = 'array'),
+    weakest     text check (length(weakest) <= 500),
+    model       text,
+    created_at  timestamptz not null default now(),
+    unique (prospect_id, criteria_id)
+);
+
+create table if not exists hiring_decisions (
+    id          uuid primary key default gen_random_uuid(),
+    prospect_id uuid not null references hiring_prospects (id) on delete cascade,
+    decision    text not null check (decision in ('pass', 'maybe', 'reach_out')),
+    reasons     text[] not null default '{}',
+    note        text check (length(note) <= 1000),
+    decided_by  text,
+    decided_at  timestamptz not null default now()
+);
+
+create index if not exists hiring_decisions_prospect_idx on hiring_decisions (prospect_id, decided_at desc);
+
+create table if not exists hiring_outreach (
+    prospect_id uuid primary key references hiring_prospects (id) on delete cascade,
+    message     text not null default '' check (length(message) <= 5000),
+    channel     text check (channel in ('linkedin', 'email', 'other')),
+    status      text not null default 'ready' check (status in ('ready', 'sent', 'replied', 'declined')),
+    sent_by     text,
+    sent_at     timestamptz,
+    replied_at  timestamptz,
+    updated_at  timestamptz not null default now()
+);
+
+-- ---- keeping the stage honest
+
+-- A decision moves the prospect, but only while they are still on the swipe
+-- side. Someone already contacted or applied stays where they are.
+create or replace function hiring_stage_from_decisions()
+returns trigger language plpgsql as $$
+declare
+    v_pid  uuid := coalesce(new.prospect_id, old.prospect_id);
+    v_last text;
+begin
+    select decision into v_last from hiring_decisions
+    where prospect_id = v_pid order by decided_at desc limit 1;
+
+    update hiring_prospects
+    set stage = case v_last when 'pass' then 'passed' when 'maybe' then 'maybe'
+                            when 'reach_out' then 'reach_out' else 'queued' end
+    where id = v_pid and stage in ('scored', 'queued', 'passed', 'maybe', 'reach_out');
+    return null;
+end $$;
+
+drop trigger if exists hiring_decisions_stage on hiring_decisions;
+create trigger hiring_decisions_stage
+    after insert or delete on hiring_decisions
+    for each row execute function hiring_stage_from_decisions();
+
+create or replace function hiring_stage_from_outreach()
+returns trigger language plpgsql as $$
+begin
+    new.updated_at := now();
+    if tg_op = 'UPDATE' and new.status is not distinct from old.status then
+        return new;
+    end if;
+    update hiring_prospects
+    set stage = case new.status when 'sent' then 'contacted' when 'replied' then 'replied'
+                                when 'declined' then 'declined' else 'reach_out' end
+    where id = new.prospect_id and stage not in ('applied', 'dropped');
+    return new;
+end $$;
+
+drop trigger if exists hiring_outreach_stage on hiring_outreach;
+create trigger hiring_outreach_stage
+    before insert or update on hiring_outreach
+    for each row execute function hiring_stage_from_outreach();
+
+-- ---- who may switch sourcing on, and change the limits
+
+create or replace function hiring_is_sourcing_admin()
+returns boolean language sql stable as $$
+    select coalesce(array_length(s.sourcing_admins, 1), 0) = 0
+        or lower(coalesce(auth.jwt() ->> 'email', '')) = any (select lower(a) from unnest(s.sourcing_admins) a)
+    from hiring_settings s where s.id;
+$$;
+
+-- Only switching it ON is guarded. The app saves with an upsert, which arrives as
+-- an INSERT even for a row that exists, so "was it on already" is read from the
+-- table rather than taken from tg_op; otherwise nobody but an admin could save
+-- anything else on a role whose search is running.
+create or replace function hiring_sourcing_guard()
+returns trigger language plpgsql as $$
+declare
+    v_was boolean;
+begin
+    if tg_op = 'UPDATE' then
+        v_was := old.enabled;
+    else
+        select enabled into v_was from hiring_sourcing where job_id = new.job_id;
+    end if;
+    if new.enabled and not coalesce(v_was, false) and not coalesce(hiring_is_sourcing_admin(), true) then
+        raise exception 'Only the people named in Settings can switch sourcing on.';
+    end if;
+    new.updated_at := now();
+    return new;
+end $$;
+
+drop trigger if exists hiring_sourcing_guard on hiring_sourcing;
+create trigger hiring_sourcing_guard
+    before insert or update on hiring_sourcing
+    for each row execute function hiring_sourcing_guard();
+
+-- Anyone may edit the wording in Settings; only the admins may change who the
+-- admins are, or the monthly limit.
+create or replace function hiring_settings_guard()
+returns trigger language plpgsql as $$
+begin
+    if (new.sourcing_admins is distinct from old.sourcing_admins or new.monthly_limit is distinct from old.monthly_limit)
+       and not coalesce(hiring_is_sourcing_admin(), true) then
+        raise exception 'Only the people named in Settings can change who may switch sourcing on, or the monthly limit.';
+    end if;
+    new.updated_at := now();
+    return new;
+end $$;
+
+drop trigger if exists hiring_settings_guard on hiring_settings;
+create trigger hiring_settings_guard
+    before update on hiring_settings
+    for each row execute function hiring_settings_guard();
+
+drop trigger if exists hiring_prospects_set_updated_at on hiring_prospects;
+create trigger hiring_prospects_set_updated_at
+    before update on hiring_prospects
+    for each row execute function set_updated_at();
+
+-- ---- access: staff only, all of it
+
+alter table hiring_settings         enable row level security;
+alter table hiring_sourcing         enable row level security;
+alter table hiring_criteria         enable row level security;
+alter table hiring_agent_runs       enable row level security;
+alter table hiring_prospects        enable row level security;
+alter table hiring_prospect_sources enable row level security;
+alter table hiring_prospect_scores  enable row level security;
+alter table hiring_decisions        enable row level security;
+alter table hiring_outreach         enable row level security;
+
+revoke all on hiring_settings         from anon;
+revoke all on hiring_sourcing         from anon;
+revoke all on hiring_criteria         from anon;
+revoke all on hiring_agent_runs       from anon;
+revoke all on hiring_prospects        from anon;
+revoke all on hiring_prospect_sources from anon;
+revoke all on hiring_prospect_scores  from anon;
+revoke all on hiring_decisions        from anon;
+revoke all on hiring_outreach         from anon;
+
+do $$
+declare t text;
+begin
+    foreach t in array array['hiring_settings', 'hiring_sourcing', 'hiring_criteria', 'hiring_agent_runs',
+                             'hiring_prospects', 'hiring_prospect_sources', 'hiring_prospect_scores',
+                             'hiring_decisions', 'hiring_outreach'] loop
+        execute format('drop policy if exists "Signed-in users can read %1$s" on %1$I', t);
+        execute format('create policy "Signed-in users can read %1$s" on %1$I for select to authenticated using (true)', t);
+        execute format('drop policy if exists "Signed-in users can add %1$s" on %1$I', t);
+        execute format('create policy "Signed-in users can add %1$s" on %1$I for insert to authenticated with check (true)', t);
+        execute format('drop policy if exists "Signed-in users can update %1$s" on %1$I', t);
+        execute format('create policy "Signed-in users can update %1$s" on %1$I for update to authenticated using (true) with check (true)', t);
+        -- Settings is one row that must always be there, so it has no delete.
+        execute format('drop policy if exists "Signed-in users can delete %1$s" on %1$I', t);
+        if t <> 'hiring_settings' then
+            execute format('create policy "Signed-in users can delete %1$s" on %1$I for delete to authenticated using (true)', t);
+        end if;
+    end loop;
+end $$;
+
+-- ---- files: photos and screenshots of work
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('hiring-prospects', 'hiring-prospects', false, 5242880,       -- 5 MB
+        array['image/png', 'image/jpeg', 'image/webp'])
+on conflict (id) do update
+    set public             = excluded.public,
+        file_size_limit    = excluded.file_size_limit,
+        allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Signed-in users can read prospect files" on storage.objects;
+create policy "Signed-in users can read prospect files"
+    on storage.objects for select to authenticated
+    using (bucket_id = 'hiring-prospects');
+
+drop policy if exists "Signed-in users can add prospect files" on storage.objects;
+create policy "Signed-in users can add prospect files"
+    on storage.objects for insert to authenticated
+    with check (bucket_id = 'hiring-prospects');
+
+drop policy if exists "Signed-in users can delete prospect files" on storage.objects;
+create policy "Signed-in users can delete prospect files"
+    on storage.objects for delete to authenticated
+    using (bucket_id = 'hiring-prospects');

@@ -132,13 +132,207 @@
 
     .filters { display: flex; margin: 0 0 16px; overflow-x: auto; }
 
+    /* ------------------------------------------------------------- role tabs */
+    /* The screens of one role, under its app bar: the funnel, finding people,
+       swiping, contacting them, and the people who applied. */
+    .roletabs {
+        display: flex; gap: 2px; padding: 0 22px; background: var(--panel);
+        border-bottom: 1px solid var(--line); flex-shrink: 0; overflow-x: auto;
+    }
+    .roletabs button {
+        border: 0; border-radius: 0; background: none; padding: 10px 12px 9px; font-size: 13px;
+        color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap;
+    }
+    .roletabs button:hover { color: var(--ink); border-color: transparent; border-bottom-color: var(--line); }
+    .roletabs button.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+    .roletabs .ct { margin-left: 6px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    /* ------------------------------------------------------------- sourcing */
+    .card > h2 { margin: 0; font-size: 15px; letter-spacing: -0.2px; display: flex; align-items: center; gap: 8px; }
+    .card > h2 .spacer { flex: 1; }
+    .card .lead { margin: -8px 0 0; font-size: 13px; color: var(--muted); line-height: 1.55; }
+    .switchrow { display: flex; align-items: center; gap: 12px; }
+    .switchrow .t b { display: block; font-size: 14px; }
+    .switchrow .t small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+    .note {
+        font-size: 12.5px; line-height: 1.5; color: var(--muted); padding: 9px 12px;
+        border-radius: 9px; background: var(--bg);
+    }
+    .note.warn { color: var(--approved); background: var(--approved-soft); }
+    .rows { display: grid; gap: 8px; }
+    .rowline { display: flex; align-items: center; gap: 8px; }
+    .rowline input[type="text"], .rowline input[type="url"] { flex: 1; min-width: 0; }
+    .rowline input[type="number"] { width: 74px; flex-shrink: 0; }
+    .rowline select { width: 110px; flex-shrink: 0; }
+    .rowline .pct { font-size: 12.5px; color: var(--muted); margin-left: -4px; }
+    .crit { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .crit:first-child { border-top: 0; padding-top: 0; }
+    .crit .hint { font-size: 12.5px; }
+    .total { font-size: 12.5px; color: var(--muted); }
+    .total.bad { color: #b91c1c; border: 0 !important; }
+    .checks { display: grid; gap: 8px; }
+    .checks label { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+    .estimate { font-size: 13px; color: var(--muted); }
+    .estimate b { color: var(--ink); font-weight: 600; }
+
+    /* ----------------------------------------------------------- swipe card */
+    /* One card on a stack, made for a phone first: the work, who they are, how
+       they match, and two ways out. Everything else is in a sheet. */
+    .swipebody { display: flex; flex-direction: column; align-items: center; padding: 18px 16px 48px; }
+    .deckbar, .deck, .swipeacts, .whystrip { width: 100%; max-width: 400px; }
+    .deckbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-height: 30px; }
+    .deckbar .count { font-size: 13px; color: var(--muted); }
+    .deckbar .count b { color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
+    .deck { position: relative; }
+    /* The edge of the next card, peeking out underneath. */
+    .deck:has(.pcard)::before {
+        content: ''; position: absolute; left: 14px; right: 14px; bottom: -8px; height: 40px;
+        border-radius: 20px; background: var(--panel); border: 1px solid var(--line); opacity: .7;
+    }
+    .pcard {
+        position: relative; z-index: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
+        overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, .07);
+    }
+    .pcard.drag { cursor: grabbing; }
+    .pcard.settle { transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+    .pcard.fly { transition: transform .26s ease-in, opacity .26s ease-in; }
+    .hero { position: relative; aspect-ratio: 4 / 3; background: var(--bg); }
+    .hero > img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; pointer-events: none; }
+    .hero .noshot { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 600; color: var(--muted); }
+    .dots { position: absolute; top: 9px; left: 12px; right: 12px; display: flex; gap: 4px; }
+    .dots span { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .55); box-shadow: 0 0 2px rgba(0, 0, 0, .25); }
+    .dots span.on { background: #fff; }
+    .stamp {
+        position: absolute; top: 24px; padding: 4px 12px; border: 3px solid; border-radius: 10px; background: var(--panel);
+        font-size: 19px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; opacity: 0; pointer-events: none;
+    }
+    .stamp.yes { left: 18px; color: var(--live); border-color: var(--live); transform: rotate(-12deg); }
+    .stamp.no { right: 18px; color: #b91c1c; border-color: #b91c1c; transform: rotate(12deg); }
+    .pbody { padding: 16px 18px 18px; display: grid; gap: 14px; }
+    .phead { display: flex; align-items: center; gap: 12px; }
+    .avatar {
+        width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
+        background: var(--accent-soft); color: var(--ink); display: flex; align-items: center; justify-content: center;
+        font-size: 15px; font-weight: 600;
+    }
+    .avatar.big { width: 112px; height: 112px; }
+    .phead .who { flex: 1; min-width: 0; }
+    .phead .who b { display: block; font-size: 18px; letter-spacing: -0.3px; }
+    .phead .who span { display: block; font-size: 13px; color: var(--muted); margin-top: 1px; }
+    .match { text-align: center; flex-shrink: 0; }
+    .match b { display: block; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+    .match small { font-size: 11px; color: var(--muted); }
+    .match.hi b { color: var(--live); }
+    .match.lo b { color: var(--approved); }
+    .summary {
+        margin: 0; font-size: 14px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .minibars {
+        display: grid; gap: 7px; width: 100%; padding: 10px 12px; border: 0; border-radius: 12px;
+        background: var(--bg); text-align: left; cursor: pointer;
+    }
+    .minibars:hover { border: 0; background: var(--accent-soft); color: var(--ink); }
+    .minibar { display: grid; grid-template-columns: minmax(0, 1fr) 76px; align-items: center; gap: 10px; font-size: 12.5px; color: var(--muted); }
+    .minibar > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .track { height: 6px; border-radius: 4px; background: var(--accent-soft); overflow: hidden; display: block; }
+    .minibars .track { background: var(--line); }
+    .fill { height: 100%; border-radius: 4px; background: var(--ink); display: block; }
+    .fill.hi { background: var(--live); }
+    .fill.lo { background: var(--approved); }
+    .pbtns { display: flex; gap: 8px; }
+    .pbtns a, .pbtns button {
+        flex: 1; text-align: center; padding: 10px; border-radius: 10px; font-size: 14px; font-weight: 600;
+        text-decoration: none; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    }
+    .pbtns .main { border-color: var(--accent); }
+    .pbtns a:hover, .pbtns button:hover { background: var(--accent-soft); color: var(--ink); }
+    .swipeacts { display: flex; justify-content: center; align-items: center; gap: 22px; margin-top: 22px; }
+    .round {
+        width: 60px; height: 60px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+        background: var(--panel); border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+    }
+    .round svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .round.no { color: #b91c1c; }
+    .round.yes { color: var(--live); }
+    .round.later { width: 46px; height: 46px; color: var(--muted); }
+    .round.later svg { width: 20px; height: 20px; stroke-width: 1.8; }
+    .round:hover { border-color: currentColor; }
+    .round.no:hover { color: #b91c1c; } .round.yes:hover { color: var(--live); } .round.later:hover { color: var(--ink); }
+    .whystrip { margin-top: 18px; }
+    .why { padding: 12px 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); display: grid; gap: 10px; font-size: 13px; }
+    .whyhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .why .chips button { border-radius: 100px; padding: 4px 11px; font-size: 12.5px; }
+    .why .chips button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+    .why kbd { margin-left: 5px; font: 10.5px var(--mono); opacity: .6; }
+
+    /* The portfolio, live, in a big sheet: the first look without leaving the
+       stack. Some sites refuse to be shown inside another page; the button in
+       the header opens them in a tab instead. */
+    dialog.site { width: min(1240px, 94vw); max-width: 94vw; height: 90vh; max-height: 90vh; }
+    dialog.site[open] { display: flex; flex-direction: column; }
+    .site .modal-head { flex-shrink: 0; }
+    .site .host { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .site .hint { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .sitebtn {
+        flex-shrink: 0; font-size: 13px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
+        color: var(--ink); text-decoration: none; white-space: nowrap;
+    }
+    .sitebtn:hover { border-color: var(--accent); }
+    .sitebody { flex: 1; position: relative; background: var(--bg); }
+    .sitebody iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+    .sitefoot { flex-shrink: 0; display: flex; justify-content: center; align-items: center; gap: 18px; padding: 10px; border-top: 1px solid var(--line); }
+    .sitefoot .round { width: 48px; height: 48px; box-shadow: none; }
+    .sitefoot .round svg { width: 22px; height: 22px; }
+    .sitefoot .round.later { width: 40px; height: 40px; }
+    .sitefoot .round.later svg { width: 18px; height: 18px; }
+
+    /* A laptop screen is short: a wider picture keeps the buttons in view. */
+    @media (max-height: 940px) { .hero { aspect-ratio: 16 / 9; } }
+
+    /* The sheet: from the bottom on a phone, a dialog on a computer. */
+    dialog.sheet { width: 520px; max-width: 94vw; }
+    .sheetbody { padding: 16px 18px 24px; display: grid; gap: 20px; max-height: 76vh; overflow-y: auto; }
+    .sec > .lbl { font-size: 11.5px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    .sec p { margin: 0; font-size: 14px; line-height: 1.6; }
+    .roles { margin-top: 10px; font-size: 13px; }
+    .roles div { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+    .roles div:last-child { border-bottom: 1px solid var(--line); }
+    .roles span { color: var(--muted); white-space: nowrap; }
+    .musts { display: grid; gap: 8px; }
+    .musts > div { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; }
+    .musts b { font-weight: 500; display: block; }
+    .musts small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+    .bars { display: grid; gap: 12px; }
+    .bar .top { display: grid; grid-template-columns: minmax(0, 1fr) 100px 22px; align-items: center; gap: 10px; font-size: 13px; }
+    .bar .top b { text-align: right; font-variant-numeric: tabular-nums; }
+    .bar .ev { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+    .bar .ev a { color: var(--muted); }
+    .weak { font-size: 13px; padding: 9px 12px; border-radius: 9px; color: var(--approved); background: var(--approved-soft); }
+    .workshots { display: grid; gap: 12px; }
+    .workshots figure { margin: 0; }
+    .workshots img { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; }
+    .workshots figcaption { font-size: 12px; color: var(--muted); margin-top: 5px; }
+    .plinks { display: flex; gap: 8px; flex-wrap: wrap; }
+    .plinks a {
+        flex: 1; text-align: center; padding: 7px 10px; font-size: 12.5px; border-radius: 8px;
+        background: var(--bg); color: var(--ink); text-decoration: none; white-space: nowrap;
+    }
+    .plinks a:hover { background: var(--accent-soft); }
+
+    /* --------------------------------------------------------------- outreach */
+    .msgbox { font-size: 13.5px; line-height: 1.55; }
+    .linkrow { display: flex; gap: 8px; align-items: center; }
+    .linkrow input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+
     @media (max-width: 760px) {
         .two { grid-template-columns: 1fr; }
         .dgrid { grid-template-columns: 1fr; max-height: 72vh; overflow-y: auto; }
         .dside { border-left: 0; border-top: 1px solid var(--line); }
         /* On a phone the lists keep the columns that matter and drop the rest. */
         #jobList table.tbl, #appList table.tbl { min-width: 0; }
-        #jobList th:nth-child(4), #jobList td:nth-child(4),
+        #jobList th:nth-child(5), #jobList td:nth-child(5),
         #appList th:nth-child(n+4), #appList td:nth-child(n+4) { display: none; }
         .tbl th, .tbl td { padding-left: 14px !important; padding-right: 14px !important; }
         table.tbl td.sm { white-space: normal; }
@@ -148,6 +342,29 @@
         .qtop input[type="text"] { flex: 1 1 calc(100% - 44px); }
         .qtop select { flex: 1 1 auto; width: auto; min-width: 0; }
         .qtop .tools { margin-left: auto; }
+        .roletabs { padding: 0 10px; }
+        .swipebody { padding: 12px 12px 40px; }
+        /* Shorter picture and summary, so the card and its buttons fit on one screen. */
+        .hero { aspect-ratio: 16 / 9; }
+        .summary { -webkit-line-clamp: 2; }
+        .pbody { gap: 12px; padding: 14px 16px 16px; }
+        .swipeacts { margin-top: 16px; }
+        /* Floats over the bottom of the screen for a few seconds after a pass,
+           where a thumb can reach it, instead of below the fold. */
+        .whystrip { position: fixed; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); width: auto; max-width: none; margin: 0; z-index: 30; }
+        .why { box-shadow: 0 10px 30px rgba(0, 0, 0, .18); }
+        .bar .top { grid-template-columns: minmax(0, 1fr) 72px 22px; }
+        .why kbd { display: none; }
+        dialog.sheet {
+            width: 100vw; max-width: 100vw; margin: auto 0 0; border-radius: 18px 18px 0 0; border-bottom: 0;
+            max-height: 88vh;
+        }
+        .sheetbody { max-height: calc(88vh - 52px); padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+        dialog.site { width: 100vw; max-width: 100vw; height: 94vh; max-height: 94vh; margin: auto 0 0; border-radius: 18px 18px 0 0; border-bottom: 0; }
+        .site .host, .site .hint { display: none; }
+        .sitefoot { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+        #outList th:nth-child(n+3), #outList td:nth-child(n+3) { display: none; }
+        #outList table.tbl { min-width: 0; }
     }
 </style>
 </head>
@@ -180,6 +397,9 @@
             Hiring <span>Kit</span>
         </div>
         <div class="spacer"></div>
+        <a class="navicon" href="#/settings" title="Settings" aria-label="Settings">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.1"/><path d="M8 1.9v1.7M8 12.4v1.7M14.1 8h-1.7M3.6 8H1.9M12.3 3.7l-1.2 1.2M4.9 11.1l-1.2 1.2M12.3 12.3l-1.2-1.2M4.9 4.9 3.7 3.7"/></svg>
+        </a>
         <a class="navicon" href="../../" title="All tools" aria-label="All tools">
             <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="4.4" height="4.4" rx="1"/><rect x="9.4" y="2.2" width="4.4" height="4.4" rx="1"/><rect x="2.2" y="9.4" width="4.4" height="4.4" rx="1"/><rect x="9.4" y="9.4" width="4.4" height="4.4" rx="1"/></svg>
         </a>
@@ -205,11 +425,11 @@
         <div class="spacer"></div>
         <div class="head-actions">
             <button type="button" id="btnCopyLink">Copy link</button>
-            <button type="button" id="btnJobApplicants">Applicants</button>
             <button type="button" id="btnJobPreview">Preview</button>
             <button class="primary" type="button" id="btnJobSave">Save</button>
         </div>
     </div>
+    <nav class="roletabs" data-tabs="role" aria-label="This role"></nav>
     <div class="body"><div class="editor">
 
         <div class="card">
@@ -263,13 +483,134 @@
         <button class="back" id="btnAppBack" title="Back to roles" aria-label="Back to roles">←</button>
         <div class="brand" id="appTitleBar">Applicants</div>
         <div class="spacer"></div>
-        <button type="button" id="btnAppEdit">Edit role</button>
     </div>
+    <nav class="roletabs" data-tabs="applicants" aria-label="This role"></nav>
     <div class="body"><div class="inner">
         <div class="filters" id="appFilters"></div>
         <div id="appList"><div class="blank">Loading…</div></div>
     </div></div>
 </section>
+
+<!-- ============================================================ SOURCING -->
+<!-- How a role finds people: what a good match is, where to look, what the card
+     shows and who acts on it. Saved per role. -->
+<section class="view" id="viewSourcing">
+    <div class="apphead">
+        <button class="back" data-back title="Back to roles" aria-label="Back to roles">←</button>
+        <div class="brand" data-title>Sourcing</div>
+        <div class="spacer"></div>
+        <button class="primary" type="button" id="btnSrcSave">Save</button>
+    </div>
+    <nav class="roletabs" data-tabs="sourcing" aria-label="This role"></nav>
+    <div class="body"><div class="editor" id="srcEditor"><div class="blank">Loading…</div></div></div>
+</section>
+
+<!-- =============================================================== SWIPE -->
+<section class="view" id="viewSwipe">
+    <div class="apphead">
+        <button class="back" data-back title="Back to roles" aria-label="Back to roles">←</button>
+        <div class="brand" data-title>Swipe</div>
+        <div class="spacer"></div>
+    </div>
+    <nav class="roletabs" data-tabs="swipe" aria-label="This role"></nav>
+    <div class="body swipebody">
+        <div class="deckbar" id="swipeBar"></div>
+        <div class="deck" id="swipeDeck"><div class="blank">Loading…</div></div>
+        <div class="swipeacts" id="swipeActs"></div>
+        <div class="whystrip" id="swipeWhy" aria-live="polite"></div>
+    </div>
+</section>
+
+<!-- ============================================================ OUTREACH -->
+<section class="view" id="viewOutreach">
+    <div class="apphead">
+        <button class="back" data-back title="Back to roles" aria-label="Back to roles">←</button>
+        <div class="brand" data-title>Outreach</div>
+        <div class="spacer"></div>
+    </div>
+    <nav class="roletabs" data-tabs="outreach" aria-label="This role"></nav>
+    <div class="body"><div class="inner">
+        <div class="filters" id="outFilters"></div>
+        <div id="outList"><div class="blank">Loading…</div></div>
+    </div></div>
+</section>
+
+<!-- ============================================================ SETTINGS -->
+<section class="view" id="viewSettings">
+    <div class="apphead">
+        <button class="back" data-back title="Back to roles" aria-label="Back to roles">←</button>
+        <div class="brand">Settings</div>
+        <div class="spacer"></div>
+        <button class="primary" type="button" id="btnSetSave">Save</button>
+    </div>
+    <div class="body"><div class="editor" id="setEditor"><div class="blank">Loading…</div></div></div>
+</section>
+
+<!-- One sourced person's outreach: the message, their link, and where it stands. -->
+<dialog id="dlgOutreach" class="wide">
+    <div class="modal-head">
+        <strong id="oName"></strong>
+        <span class="muted" id="oHeadline" style="font-size:12.5px"></span>
+        <div class="spacer"></div>
+        <button type="button" class="iconbtn" id="oClose" aria-label="Close">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+    </div>
+    <div class="dlg-form" style="gap:16px">
+        <div class="plinks" id="oLinks" style="margin:0"></div>
+        <div class="field">
+            <label for="oMessage" id="lblOMessage">Message</label>
+            <textarea id="oMessage" class="msgbox" rows="10" maxlength="5000"></textarea>
+        </div>
+        <div class="field">
+            <label for="oLink" id="lblOLink">Their personal link</label>
+            <div class="linkrow">
+                <input type="text" id="oLink" readonly>
+                <button type="button" id="oCopyLink">Copy</button>
+            </div>
+        </div>
+        <div class="chips" id="oStatus"></div>
+    </div>
+    <div class="dfoot">
+        <div class="head-actions">
+            <button type="button" id="oCopy">Copy message</button>
+            <button type="button" id="oSaveMsg">Save message</button>
+        </div>
+        <div class="head-actions" id="oActs"></div>
+    </div>
+</dialog>
+
+<!-- Whatever the swipe card leaves out: the scores with their evidence, or
+     everything else about the person. -->
+<!-- Their portfolio, live, with the same three choices as the card. -->
+<dialog id="dlgSite" class="site">
+    <div class="modal-head">
+        <strong id="siteName" tabindex="-1" autofocus style="outline:none"></strong>
+        <span class="host" id="siteHost"></span>
+        <div class="spacer"></div>
+        <span class="hint">Blank? Some sites block previews.</span>
+        <a class="sitebtn" id="siteOpen" href="#" target="_blank" rel="noopener noreferrer">Open in new tab</a>
+        <button type="button" class="iconbtn" id="siteClose" aria-label="Close">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+    </div>
+    <div class="sitebody">
+        <iframe id="siteFrame" title="Portfolio" referrerpolicy="no-referrer"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"></iframe>
+    </div>
+    <div class="sitefoot" id="siteFoot"></div>
+</dialog>
+
+<dialog id="dlgSheet" class="sheet">
+    <div class="modal-head">
+        <strong id="sheetTitle" tabindex="-1" autofocus style="outline:none"></strong>
+        <div class="spacer"></div>
+        <button type="button" class="iconbtn" id="sheetClose" aria-label="Close">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+    </div>
+    <div class="sheetbody" id="sheetBody"></div>
+</dialog>
 
 <!-- A single applicant: what they said on the left, what only staff decide on the right. -->
 <dialog id="dlgApplicant" class="big">
@@ -312,5 +653,6 @@
 <script src="../../shared/ui.js"></script>
 <script src="api.js"></script>
 <script src="app.js"></script>
+<script src="sourcing.js"></script>
 </body>
 </html>
