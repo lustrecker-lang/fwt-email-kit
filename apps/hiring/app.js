@@ -30,8 +30,6 @@ var TIPS = {
     intro: 'Shown on the start screen, before the clock runs, so the applicant can prepare: what they will be asked to do, what to have ready, how to plan their time. The step\u2019s own text, video and questions stay hidden until they press Start.',
     time: 'The applicant gets this many hours from the moment they press Start, and a late answer is refused. Until they start, they cannot see this step\u2019s text, video or questions.',
     notes: 'Only signed-in staff can see these.',
-    emails: 'Sent through Resend when you set someone to Rejected. You always see the email, and can change it, before it goes. Nothing is sent automatically.',
-    placeholders: '{{first_name}}, {{name}} and {{role}} are filled in for each applicant. A blank line starts a new paragraph.',
     timers: 'The clock on each timed step. Giving more time moves the deadline a full day on from now, or from the old deadline if that is later.'
 };
 
@@ -43,9 +41,7 @@ var S = {
     dirty: false,
     hintOpen: {},         /* question id -> its help-text box is showing */
     slugTouched: false,   /* once the link name is typed by hand, stop deriving it */
-    tpl: null,            /* the role's rejection email: { subject, body } */
-    tplDirty: false,      /* only saved once someone has changed it */
-    app: { job: null, steps: [], list: [], answered: {}, starts: {}, emails: {}, filter: 'all', open: null }
+    app: { job: null, steps: [], list: [], answered: {}, starts: {}, filter: 'all', open: null }
 };
 
 /* ================================================================== router */
@@ -287,7 +283,6 @@ function markDirty() { S.dirty = true; }
 function startNewJob() {
     S.dirty = false; S.removed = []; S.slugTouched = false;
     S.job = { id: null, slug: '', title: '', team: '', summary: '', description: '', status: 'draft' };
-    S.tpl = Object.assign({}, HiringApi.DEFAULT_TEMPLATES.rejected); S.tplDirty = false;
 
     /* A funnel to start from, so the shape is visible: a few quick questions,
      * then the case study. Delete or rewrite whatever does not fit. */
@@ -320,14 +315,10 @@ function openJob(id) {
     S.dirty = false; S.removed = [];
     $('stepList').innerHTML = '<div class="blank">Loading…</div>';
     Promise.all([
-        HiringApi.getJob(id), HiringApi.listSteps(id),
-        /* Not fatal: a database that predates emails still edits roles. */
-        HiringApi.getTemplate(id, 'rejected').catch(function () { return null; })
+        HiringApi.getJob(id), HiringApi.listSteps(id)
     ]).then(function (r) {
         if (!r[0]) { toast('That role no longer exists.', 'err'); go('#/'); return; }
         S.job = r[0];
-        S.tpl = r[2] ? { subject: r[2].subject, body: r[2].body } : Object.assign({}, HiringApi.DEFAULT_TEMPLATES.rejected);
-        S.tplDirty = false;
         S.slugTouched = true;
         S.steps = r[1].map(function (s) {
             return {
@@ -347,7 +338,6 @@ function fillEditor() {
     $('jSlug').value = j.slug; $('jStatus').value = j.status;
     $('jSlug').classList.remove('bad');
     $('jobTitleBar').textContent = j.title || 'New role';
-    $('tSubject').value = S.tpl.subject; $('tBody').value = S.tpl.body;
 
     var saved = !!j.id;
     ['btnJobApplicants', 'btnJobPreview', 'btnCopyLink'].forEach(function (id) {
@@ -376,15 +366,6 @@ function fillEditor() {
     });
 });
 
-['tSubject', 'tBody'].forEach(function (id) {
-    $(id).addEventListener('input', function () {
-        if (!S.tpl) return;
-        S.tpl[id === 'tSubject' ? 'subject' : 'body'] = this.value;
-        S.tplDirty = true;
-        markDirty();
-    });
-});
-
 /* ---- steps ---- */
 
 /* The tips on the static labels, added once. */
@@ -395,8 +376,6 @@ function fillEditor() {
     tipOn($('lblDesc'), TIPS.desc);
     tipOn($('lblNotes'), TIPS.notes);
     $('stepsHead').querySelector('h2').insertAdjacentHTML('afterend', UI.tip(TIPS.steps));
-    $('emailsHead').querySelector('h2').insertAdjacentHTML('afterend', UI.tip(TIPS.emails));
-    tipOn($('lblTBody'), TIPS.placeholders);
 })();
 
 function iconBtn(act, icon, title, extra, disabled) {
@@ -753,7 +732,6 @@ function validateJob() {
         badStep = -1;
     }
     if (j.status === 'open' && !S.steps.length) return 'Add at least one step before opening the role.';
-    if (S.tplDirty && (!S.tpl.subject.trim() || !S.tpl.body.trim())) return 'The rejection email needs a subject and a message.';
     return null;
 }
 
@@ -782,10 +760,6 @@ $('btnJobSave').addEventListener('click', function () {
          * updates this role instead of creating a second one. */
         S.job.id = row.id;
         return HiringApi.saveSteps(row.id, S.steps, S.removed);
-    }).then(function () {
-        if (!S.tplDirty) return;
-        return HiringApi.saveTemplate(S.job.id, 'rejected', S.tpl.subject.trim(), S.tpl.body.trim())
-            .then(function () { S.tplDirty = false; });
     }).then(function () {
         S.removed = []; S.dirty = false;
         toast('Saved “' + S.job.title + '”');
@@ -835,10 +809,9 @@ function openApplicants(jobId) {
             $('appTitleBar').textContent = A.job.title;
             var ids = A.list.map(function (a) { return a.id; });
             return Promise.all([
-                HiringApi.responseSteps(ids), HiringApi.listStarts(ids),
-                HiringApi.emailLog(ids).catch(function () { return {}; })
+                HiringApi.responseSteps(ids), HiringApi.listStarts(ids)
             ]).then(function (r) {
-                A.answered = r[0]; A.starts = r[1]; A.emails = r[2];
+                A.answered = r[0]; A.starts = r[1];
                 renderApplicants();
             });
         }).catch(function (ex) {
@@ -953,13 +926,6 @@ $('appList').addEventListener('change', function (e) {
     if (!sel) return;
     var a = applicantById(sel.getAttribute('data-astatus'));
     if (!a || sel.value === a.status) return;
-    if (sel.value === 'rejected') {
-        rejectFlow(a, { status: 'rejected' }).then(function (result) {
-            if (result !== 'cancel') a.status = 'rejected';
-            renderApplicants();
-        });
-        return;
-    }
     sel.disabled = true;
     HiringApi.updateApplicant(a.id, { status: sel.value }).then(function () {
         a.status = sel.value;
@@ -1062,7 +1028,6 @@ function openApplicant(id) {
     $('dInterview').value = toLocalInput(a.interview_at);
     $('dNotes').value = a.notes || '';
     renderTimers(a);
-    renderEmails(a);
     $('dAnswers').innerHTML = '<div class="none">Loading\u2026</div>';
     $('dlgApplicant').showModal();
 
@@ -1123,12 +1088,6 @@ $('dSave').addEventListener('click', function () {
         renderApplicants();
         $('dlgApplicant').close();
     }
-    /* Becoming rejected is the one change that asks first, because it can send
-     * an email. The flow saves the rest of the record along with the status. */
-    if (patch.status === 'rejected' && a.status !== 'rejected') {
-        rejectFlow(a, patch).then(function (result) { if (result !== 'cancel') applied(); });
-        return;
-    }
     btn.disabled = true; btn.textContent = 'Saving…';
     HiringApi.updateApplicant(a.id, patch).then(function () {
         applied();
@@ -1155,133 +1114,6 @@ $('dDelete').addEventListener('click', function () {
             renderApplicants();
             toast('Deleted ' + a.name);
         }).catch(function (ex) { toast('Delete failed: ' + friendly(ex), 'err'); });
-    });
-});
-
-/* ================================================================== emails */
-
-/* The emails already sent to someone, and a way to send the rejection if they
- * were rejected without one. */
-function renderEmails(a) {
-    var sent = (S.app.emails[a.id] || []).filter(function (e) { return e.kind === 'rejected'; });
-    var canSend = a.status === 'rejected' && !sent.length;
-    $('dEmails').innerHTML = (sent.length || canSend)
-        ? '<div class="timers"><div class="lbl">Emails' + UI.tip(TIPS.emails) + '</div>' +
-            sent.map(function (e) {
-                return '<div class="timer-row"><div class="tt">Rejection' +
-                    UI.tip('Sent ' + when(e.sent_at) + (e.sent_by ? ' by ' + e.sent_by : '') + '.') + '</div>' +
-                    '<span class="chip go">Sent</span></div>';
-            }).join('') +
-            (canSend ? '<div><button type="button" class="sm" id="dSendReject">Send rejection email</button></div>' : '') +
-          '</div>'
-        : '';
-}
-
-$('dEmails').addEventListener('click', function (e) {
-    if (!e.target.closest('#dSendReject') || !S.app.open) return;
-    var a = S.app.open;
-    rejectFlow(a, null, 'send').then(function () { renderEmails(a); });
-});
-
-/* Rejecting someone, with the email in front of you.
- *
- *   mode 'reject'  the status is about to change: Reject and send, Reject
- *                  without email, or Cancel (nothing changes)
- *   mode 'send'    already rejected: just the email
- *
- * The status is saved first, then the email sent, so a failed send never leaves
- * someone "rejected" in one place and "submitted" in another. If the send
- * fails, the dialog stays open as a plain send so it can be tried again.
- *
- * Resolves 'cancel', 'rejected' (no email) or 'sent'. */
-var EM = { a: null, patch: null, mode: 'reject', statusDone: false, sentBefore: null, resolve: null };
-
-function rejectFlow(a, patch, mode) {
-    return HiringApi.getTemplate(S.app.job.id, 'rejected').catch(function () { return null; }).then(function (t) {
-        t = t || HiringApi.DEFAULT_TEMPLATES.rejected;
-        var vars = HiringApi.templateVars(a, S.app.job);
-        EM.a = a; EM.patch = patch; EM.mode = mode || 'reject'; EM.statusDone = EM.mode === 'send';
-        EM.sentBefore = (S.app.emails[a.id] || []).filter(function (e) { return e.kind === 'rejected'; })[0] || null;
-        $('eSubject').value = HiringApi.fill(t.subject, vars);
-        $('eBody').value = HiringApi.fill(t.body, vars);
-        $('eTo').innerHTML = esc(a.name) + ' <small>' + esc(a.email) + '</small>';
-        $('eErr').textContent = '';
-        paintEmail();
-        $('dlgEmail').showModal();
-        $('eBody').focus();
-        $('eBody').setSelectionRange(0, 0);
-        $('eBody').scrollTop = 0;
-        return new Promise(function (resolve) { EM.resolve = resolve; });
-    });
-}
-
-function paintEmail() {
-    var rejecting = EM.mode === 'reject' && !EM.statusDone;
-    $('eTitle').textContent = rejecting ? 'Reject ' + EM.a.name + '?' : 'Email ' + EM.a.name;
-    $('eSkip').style.display = rejecting ? '' : 'none';
-    $('eSend').textContent = rejecting
-        ? (EM.sentBefore ? 'Reject and send again' : 'Reject and send')
-        : (EM.sentBefore ? 'Send again' : 'Send email');
-    $('eCancel').textContent = EM.statusDone && EM.mode === 'reject' ? 'Close' : 'Cancel';
-    $('eNote').textContent = EM.sentBefore ? 'A rejection email was already sent ' + when(EM.sentBefore.sent_at) + '.' : '';
-}
-
-function busyEmail(on, label) {
-    ['eSend', 'eSkip', 'eCancel', 'eSubject', 'eBody'].forEach(function (id) { $(id).disabled = on; });
-    if (label) $('eSend').textContent = label;
-}
-
-function settleEmail(result) {
-    var r = EM.resolve;
-    EM.resolve = null;
-    if ($('dlgEmail').open) $('dlgEmail').close();
-    if (r) r(result);
-}
-
-/* Closing by any route other than the buttons reports what actually happened:
- * if the status was already saved, it was a rejection, not a cancel. */
-function dismissEmail() { settleEmail(EM.statusDone && EM.mode === 'reject' ? 'rejected' : 'cancel'); }
-
-$('eCancel').addEventListener('click', dismissEmail);
-$('eClose').addEventListener('click', dismissEmail);
-$('dlgEmail').addEventListener('cancel', function (e) { e.preventDefault(); if (!$('eSend').disabled) dismissEmail(); });
-
-$('eSkip').addEventListener('click', function () {
-    busyEmail(true);
-    HiringApi.updateApplicant(EM.a.id, EM.patch).then(function () {
-        EM.statusDone = true;
-        busyEmail(false);
-        settleEmail('rejected');
-        toast(EM.a.name + ' rejected. No email sent.');
-    }).catch(function (ex) {
-        busyEmail(false); paintEmail();
-        $('eErr').textContent = friendly(ex);
-    });
-});
-
-$('eSend').addEventListener('click', function () {
-    var subject = $('eSubject').value.trim(), body = $('eBody').value.trim();
-    if (!subject || !body) { $('eErr').textContent = 'The email needs a subject and a message.'; return; }
-    $('eErr').textContent = '';
-    var a = EM.a;
-    busyEmail(true, EM.statusDone ? 'Sending\u2026' : 'Rejecting\u2026');
-
-    (EM.statusDone ? Promise.resolve() : HiringApi.updateApplicant(a.id, EM.patch)).then(function () {
-        EM.statusDone = true;
-        $('eSend').textContent = 'Sending\u2026';
-        return HiringApi.sendEmail(a.id, 'rejected', subject, body, !!EM.sentBefore);
-    }).then(function (r) {
-        (S.app.emails[a.id] = S.app.emails[a.id] || []).unshift({ kind: 'rejected', sent_at: r.sent_at, sent_by: Backend.currentEmail() });
-        busyEmail(false);
-        var wasRejecting = EM.mode === 'reject';
-        settleEmail('sent');
-        toast((wasRejecting ? a.name + ' rejected. ' : '') + 'Email sent to ' + a.email + '.');
-    }).catch(function (ex) {
-        busyEmail(false);
-        if (ex.code === 'already') EM.sentBefore = { sent_at: ex.sent_at };
-        paintEmail();
-        $('eErr').textContent = (EM.statusDone && EM.mode === 'reject' ? 'Marked as rejected, but the email was not sent. ' : '') +
-            friendly(ex);
     });
 });
 

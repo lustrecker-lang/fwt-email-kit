@@ -156,17 +156,42 @@ create index if not exists hiring_applicants_job_status_idx
 -- (supabase/functions/hiring-email), which holds the Resend key. Nothing here
 -- sends anything; these tables are what the app edits and what it remembers.
 
--- The wording, per role. `kind` names which email: only 'rejected' for now, so a
--- later "invite to interview" is a new value rather than a new table. The app
--- fills {{first_name}}, {{name}} and {{role}} in before showing it for sending.
+-- The wording, one per kind of email, shared by every role rather than saved
+-- again for each one — a rejection reads the same whichever role it is for.
+-- `kind` names which email: only 'rejected' for now, so a later "invite to
+-- interview" is a new row, not a new table. The app fills {{first_name}},
+-- {{name}} and {{role}} in before showing it for sending.
 create table if not exists hiring_templates (
-    job_id     uuid not null references hiring_jobs (id) on delete cascade,
     kind       text not null check (kind in ('rejected')),
     subject    text not null check (length(subject) between 1 and 200),
     body       text not null check (length(body) between 1 and 10000),
     updated_at timestamptz not null default now(),
-    primary key (job_id, kind)
+    primary key (kind)
 );
+
+-- Earlier versions keyed this per role (job_id, kind). Collapsing to one row
+-- per kind: keep the most recently edited copy of each kind and drop the
+-- column. A fresh database has no job_id column, so this is a no-op for it.
+do $$
+begin
+    if exists (
+        select 1 from information_schema.columns
+        where table_name = 'hiring_templates' and column_name = 'job_id'
+    ) then
+        create temporary table hiring_templates_migrate on commit drop as
+        select distinct on (kind) kind, subject, body, updated_at
+        from hiring_templates
+        order by kind, updated_at desc;
+
+        delete from hiring_templates;
+        alter table hiring_templates drop constraint if exists hiring_templates_pkey;
+        alter table hiring_templates drop column job_id;
+        alter table hiring_templates add primary key (kind);
+
+        insert into hiring_templates (kind, subject, body, updated_at)
+        select kind, subject, body, updated_at from hiring_templates_migrate;
+    end if;
+end $$;
 
 -- What was actually sent, to whom and by whom. Kept so nobody is emailed twice
 -- by accident, and so the applicant's record says it happened. Goes with the

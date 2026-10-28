@@ -355,15 +355,16 @@ var HiringApi = (function () {
         return { name: name, first_name: name.split(/\s+/)[0] || name, role: (job && job.title) || '' };
     }
 
-    /* The role's saved template, or null when it has never been edited. */
-    function getTemplate(jobId, kind) {
-        return staff('hiring_templates?select=subject,body&job_id=eq.' + q(jobId) + '&kind=eq.' + q(kind))
+    /* The saved template for this kind of email, shared by every role, or null
+     * when it has never been edited. */
+    function getTemplate(kind) {
+        return staff('hiring_templates?select=subject,body&kind=eq.' + q(kind))
             .then(function (rows) { return rows[0] || null; });
     }
 
-    function saveTemplate(jobId, kind, subject, body) {
-        return staff('hiring_templates?on_conflict=job_id,kind', 'POST',
-            { job_id: jobId, kind: kind, subject: subject, body: body },
+    function saveTemplate(kind, subject, body) {
+        return staff('hiring_templates?on_conflict=kind', 'POST',
+            { kind: kind, subject: subject, body: body },
             'resolution=merge-duplicates,return=minimal');
     }
 

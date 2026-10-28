@@ -133,17 +133,6 @@
 
     .filters { display: flex; margin: 0 0 16px; overflow-x: auto; }
 
-    /* ------------------------------------------------------------- emails */
-    #dlgEmail .dlg-form { gap: 14px; padding: 18px 20px 16px; }
-    #dlgEmail textarea { font-size: 14px; line-height: 1.55; }
-    .eto { font-size: 14px; }
-    .eto small { color: var(--muted); font-size: 13px; }
-    .enote:empty, #dlgEmail .err:empty { display: none; }
-    .enote {
-        font-size: 13px; padding: 9px 12px; border-radius: 10px;
-        background: var(--approved-soft); border: 1px solid var(--approved-line); color: var(--approved);
-    }
-    .dlg-actions .spacer { flex: 1; }
     @media (max-width: 760px) {
         .two { grid-template-columns: 1fr; }
         .dgrid { grid-template-columns: 1fr; max-height: 72vh; overflow-y: auto; }
@@ -267,20 +256,6 @@
             <div class="steps" id="stepList"></div>
         </div>
 
-        <div>
-            <div class="sectionhead" id="emailsHead"><h2>Emails</h2></div>
-            <div class="card">
-                <div class="field">
-                    <label for="tSubject">Rejection subject</label>
-                    <input type="text" id="tSubject" maxlength="200">
-                </div>
-                <div class="field">
-                    <label for="tBody" id="lblTBody">Rejection message</label>
-                    <textarea id="tBody" rows="9" maxlength="10000"></textarea>
-                </div>
-            </div>
-        </div>
-
     </div></div>
 </section>
 
@@ -324,46 +299,11 @@
                 <textarea id="dNotes" rows="4"></textarea>
             </div>
             <div id="dTimers"></div>
-            <div id="dEmails"></div>
         </aside>
     </div>
     <div class="dfoot">
         <button type="button" class="danger" id="dDelete">Delete</button>
         <button type="button" class="primary" id="dSave">Save</button>
-    </div>
-</dialog>
-
-<!-- Shown whenever someone is set to Rejected, and from an applicant's record.
-     Nothing is sent without someone reading the email first. -->
-<dialog id="dlgEmail" class="wide">
-    <div class="modal-head">
-        <strong id="eTitle"></strong>
-        <div class="spacer"></div>
-        <button type="button" class="iconbtn" id="eClose" aria-label="Close">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
-        </button>
-    </div>
-    <div class="dlg-form">
-        <div class="field">
-            <label>To</label>
-            <div id="eTo" class="eto"></div>
-        </div>
-        <div class="field">
-            <label for="eSubject">Subject</label>
-            <input type="text" id="eSubject" maxlength="200">
-        </div>
-        <div class="field">
-            <label for="eBody">Message</label>
-            <textarea id="eBody" rows="11" maxlength="10000"></textarea>
-        </div>
-        <div class="enote" id="eNote"></div>
-        <div class="err" id="eErr" role="alert"></div>
-        <div class="dlg-actions">
-            <button type="button" class="ghost" id="eCancel">Cancel</button>
-            <div class="spacer"></div>
-            <button type="button" id="eSkip">Reject without email</button>
-            <button type="button" class="primary" id="eSend">Reject and send</button>
-        </div>
     </div>
 </dialog>
 

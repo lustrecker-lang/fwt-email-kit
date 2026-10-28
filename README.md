@@ -618,17 +618,23 @@ the email tool. **Run it again whenever it changes**: it is safe to re-run and
 brings an older database up to date. The timed steps need the latest version; the
 public page will not load a role's steps until it has been run.
 
-**Rejection emails.** Setting someone to **Rejected**, from the list or from their
-record, opens the email first, already filled in for that person. Edit it if you
-like, then **Reject and send**, **Reject without email**, or **Cancel** (nothing
-changes). Each role has its own wording under **Emails** at the bottom of the role
-editor; `{{first_name}}`, `{{name}}` and `{{role}}` are filled in per applicant.
-Sends are recorded, so the applicant's record shows when it went and who sent it,
-and a second send asks first. Someone rejected without an email can be sent one
-later from their record.
+**Rejection emails are turned off for now.** Setting someone to **Rejected** just
+saves their status — no email, no dialog. The wording lives in one shared
+`hiring_templates` row (`{{first_name}}`, `{{name}}` and `{{role}}` filled in per
+applicant), not per role, because it is the same letter whichever role it is for.
+There is no screen to edit it yet; `HiringApi.getTemplate`/`saveTemplate`/
+`sendEmail` and the Edge Function below are in place, but nothing in the UI calls
+them until this is switched back on.
 
-Sending goes through Resend from a Supabase Edge Function, because the Resend key
-is a secret and nothing in this app's own files is. One-time setup:
+Re-enabling it needs: a settings screen (or similar) to edit the one shared
+template, and the reject flow wired back up to open a confirmation/send dialog
+before saving the status. The pieces to pick that back up are still in
+`apps/hiring/api.js` (`getTemplate`, `saveTemplate`, `sendEmail`, `emailLog`) and
+`supabase/functions/hiring-email`.
+
+Sending, once wired up again, goes through Resend from a Supabase Edge Function,
+because the Resend key is a secret and nothing in this app's own files is.
+One-time setup:
 
 1. **Resend:** add and verify your domain (Domains > Add domain, then the DNS
    records it shows). Until then Resend only delivers to your own account address.
