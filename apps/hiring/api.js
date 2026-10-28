@@ -466,6 +466,21 @@ var HiringApi = (function () {
         return Backend.rpc('hiring_save_step', { p_token: token, p_step: stepId, p_answers: answers }, true);
     }
 
+    /* Asks the hiring-notify Edge Function for the applicant's own email: kind is
+     * 'started' or 'submitted'. Safe to call again and again: the function sends
+     * each one once per applicant and answers "already" after that. Never throws
+     * and never holds anything up, because an email that fails must not stop
+     * someone applying. */
+    function notify(token, kind) {
+        if (!token) return Promise.resolve(null);
+        return fetch(SUPABASE.url + '/functions/v1/hiring-notify', {
+            method: 'POST',
+            headers: Backend.anonHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ token: token, kind: kind })
+        }).then(function (r) { return r.json().catch(function () { return null; }); })
+          .catch(function () { return null; });
+    }
+
     /* kind is 'applicant' for documents or 'video' for a video answer. */
     function uploadApplicantFile(token, file, kind, onProgress) {
         return Backend.uploadPrivate(kind === 'video' ? VIDEO_BUCKET : BUCKET, token, file,
@@ -516,6 +531,7 @@ var HiringApi = (function () {
         apply: apply,
         progress: progress,
         saveStep: saveStep,
+        notify: notify,
         uploadApplicantFile: uploadApplicantFile
     };
 })();

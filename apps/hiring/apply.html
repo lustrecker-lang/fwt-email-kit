@@ -196,6 +196,10 @@ function boot() {
             TOKEN = t; NAME = p.name; ANSWERS = p.answers || {};
             STARTS = p.starts || {};
             if (p.now) SKEW = Date.parse(p.now) - Date.now();
+            /* Asked again on every return visit, so an email that failed to go
+             * the first time gets another chance. One that already went is not
+             * sent twice; the function answers "already". */
+            HiringApi.notify(t, p.status === 'in_progress' ? 'started' : 'submitted');
             if (p.status !== 'in_progress') { showDone(); return; }
             IDX = firstUnanswered();
             showStep();
@@ -278,6 +282,9 @@ function showIntro() {
         btn.disabled = true; btn.textContent = 'Starting\u2026';
         HiringApi.apply(SLUG, name, email).then(function (token) {
             keepToken(token);
+            /* Their personal link, by email. Not waited for: the application
+             * carries on whether or not it arrives. */
+            HiringApi.notify(token, 'started');
             ANSWERS = {}; IDX = 0;
             showStep();
         }).catch(function (ex) {
@@ -542,7 +549,11 @@ function submitStep(step, saved, last) {
     }).then(function (status) {
         BUSY = false;
         ANSWERS[step.id] = answers;
-        if (status === 'submitted') { showDone(); return; }
+        if (status === 'submitted') {
+            if (!PREVIEW) HiringApi.notify(TOKEN, 'submitted');
+            showDone();
+            return;
+        }
         IDX = Math.min(IDX + 1, STEPS.length - 1);
         showStep();
     }).catch(function (ex) {

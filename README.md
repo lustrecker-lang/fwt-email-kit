@@ -618,6 +618,23 @@ the email tool. **Run it again whenever it changes**: it is safe to re-run and
 brings an older database up to date. The timed steps need the latest version; the
 public page will not load a role's steps until it has been run.
 
+**Applicant emails.** An applicant gets two emails on their own, with nobody on
+staff pressing anything: one when they start (with their personal link to come
+back later) and one when they submit. They are sent by the `hiring-notify` Edge
+Function through Resend, at most once each per applicant. Setup:
+
+1. **SQL:** run `supabase/hiring.sql` again (allows the two new kinds in the send
+   log, and the index that stops either being sent twice).
+2. **Function:** Edge Functions > Deploy a new function > Via editor. Name it
+   `hiring-notify`, paste `supabase/functions/hiring-notify/index.ts`, and turn
+   **Verify JWT off** (the apply page calls it as an anonymous visitor; the
+   function checks the applicant's token itself).
+3. **Secrets:** `RESEND_API_KEY` and `HIRING_FROM` as below, plus
+   `HIRING_APPLY_URL`, the public `https://` address of `apps/hiring/apply.html`,
+   so the first email can link back. Optional: `HIRING_REPLY_TO` (without it the
+   emails say the address is not monitored) and `HIRING_COMPANY` (defaults to
+   Flying Whale).
+
 **Rejection emails are turned off for now.** Setting someone to **Rejected** just
 saves their status — no email, no dialog. The wording lives in one shared
 `hiring_templates` row (`{{first_name}}`, `{{name}}` and `{{role}}` filled in per
@@ -693,7 +710,8 @@ Each tool lives in its own folder under `apps/` and loads what it needs from
 | `apps/hiring/index.html`, `app.js` | The hiring tool, staff side: roles, the funnel editor, and the applicant list. See [Hiring Kit](#hiring-kit). |
 | `apps/hiring/apply.html` | The public page an applicant uses. Needs no account. |
 | `apps/hiring/api.js` | The hiring tool's tables and applicant functions. Defines `HiringApi`. |
-| `supabase/functions/hiring-email/index.ts` | The Edge Function that sends applicant emails through Resend. Holds no key itself; reads `RESEND_API_KEY` from Supabase secrets. |
+| `supabase/functions/hiring-email/index.ts` | The Edge Function that sends staff-triggered applicant emails (rejection) through Resend. Holds no key itself; reads `RESEND_API_KEY` from Supabase secrets. |
+| `supabase/functions/hiring-notify/index.ts` | The Edge Function that sends the applicant's own "started" and "submitted" emails, once each. Called from the apply page with the applicant's token. |
 | `apps/email/index.html` | The composer. Build, theme, upload, save, export. Nothing brand-specific lives here. |
 | `apps/email/library.html` | The shared read-only link. Browse, preview, copy HTML, read merge fields. |
 | `apps/email/blocks.js` | **The catalogue.** Every section, plus the document shell and the variable extractor. Edit this to add a section. |

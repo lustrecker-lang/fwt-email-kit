@@ -209,6 +209,20 @@ create table if not exists hiring_email_log (
 
 create index if not exists hiring_email_log_applicant_idx on hiring_email_log (applicant_id);
 
+-- The applicant's own two emails, sent by the hiring-notify Edge Function:
+-- 'started' when they begin an application, 'submitted' when they finish it.
+-- Staff never send these. The apply page asks for them, so each is allowed once
+-- per applicant and no more; the unique index is what makes that hold even when
+-- two requests arrive together. 'rejected' is left out of it on purpose, since
+-- staff can choose to send that one again.
+alter table hiring_email_log drop constraint if exists hiring_email_log_kind_check;
+alter table hiring_email_log add constraint hiring_email_log_kind_check
+    check (kind in ('rejected', 'started', 'submitted'));
+
+create unique index if not exists hiring_email_log_once_idx
+    on hiring_email_log (applicant_id, kind)
+    where kind in ('started', 'submitted');
+
 -- =============================================================== responses
 
 create table if not exists hiring_responses (
