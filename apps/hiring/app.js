@@ -383,16 +383,6 @@ function iconBtn(act, icon, title, extra, disabled) {
         '" aria-label="' + title + '"' + (disabled ? ' disabled' : '') + '>' + ICON[icon] + '</button>';
 }
 
-/* A closed step is one line: how many questions, and whether it is timed. */
-function stepChips(s) {
-    var n = s.fields.length;
-    return '<span class="chips">' +
-        '<span class="chip">' + n + ' question' + (n === 1 ? '' : 's') + '</span>' +
-        (s._timed && s.time_limit_hours ? '<span class="chip look">' + esc(s.time_limit_hours) + 'h limit</span>' : '') +
-        (s._video && s.video_url ? '<span class="chip">Video</span>' : '') +
-    '</span>';
-}
-
 /* `j` is the question's position within its step, which the click and input
  * handlers read back off data-f to find the right object. */
 function questionHtml(f, j, many) {
@@ -437,7 +427,7 @@ function stepHtml(s, i) {
         '<span class="num">' + (i + 1) + '</span>' +
         (open
             ? '<input type="text" data-k="title" placeholder="Step title" value="' + esc(s.title) + '" maxlength="120" aria-label="Step title">'
-            : '<span class="name' + (s.title ? '' : ' empty') + '">' + esc(s.title || 'Untitled step') + '</span>' + stepChips(s)) +
+            : '<span class="name' + (s.title ? '' : ' empty') + '">' + esc(s.title || 'Untitled step') + '</span>') +
         '<span class="tools">' +
             iconBtn('del', 'x', 'Remove step', ' del') +
             '<span class="chev" data-chev>' + ICON.chev + '</span>' +
