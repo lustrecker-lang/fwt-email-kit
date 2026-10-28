@@ -25,6 +25,7 @@ var APPS = [
         id: 'hiring',
         name: 'Hiring Kit',
         desc: 'Build a custom application funnel for a role and share one public link.',
-        href: 'apps/hiring/'
+        href: 'apps/hiring/',
+        icon: 'public/icon_hiring.png'
     }
 ];

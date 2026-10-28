@@ -25,3 +25,41 @@
         --approved: #f3bd62; --approved-soft: #302611; --approved-line: #5b4825;
     }
 }
+
+/* A visitor's own choice, set by shared/theme.js and remembered in
+ * localStorage. The attribute selector outranks the media query above on
+ * specificity alone, so picking Light or Dark here wins over whatever the
+ * operating system prefers; leaving the choice at "Auto" removes the
+ * attribute and falls back to the media query exactly as before. */
+:root[data-theme="dark"] {
+    --bg: #14161a; --panel: #1c1f25; --ink: #e8eaed; --muted: #99a0aa;
+    --line: #2c3037; --accent: #e8eaed; --accent-soft: #2a2f37;
+    --on-accent: #14161a;
+    --live: #57c98a; --live-soft: #18271e; --live-line: #2f4a39;
+    --approved: #f3bd62; --approved-soft: #302611; --approved-line: #5b4825;
+}
+:root[data-theme="light"] {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #16181d; --muted: #737a85;
+    --line: #e4e7ec; --accent: #16181d; --accent-soft: #eceef1;
+    --on-accent: #ffffff;
+    --live: #15803d; --live-soft: #f0f7f2; --live-line: #c2e2cc;
+    --approved: #a16207; --approved-soft: #fff8e8; --approved-line: #f2d59c;
+}
+
+/* ---------------------------------------------------------- theme toggle */
+/* Built by shared/theme.js on every page, not written into any one of them,
+ * so it cannot drift between tools. One small icon button, not a bar — the
+ * page underneath it is the point, this just sits quietly in the corner.
+ * Click cycles Light -> Dark -> Auto; the icon and title say which. */
+#fwtTheme {
+    position: fixed; z-index: 40; right: 10px; bottom: 10px;
+    width: 26px; height: 26px; padding: 0; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+    cursor: pointer; opacity: .55; transition: opacity .15s;
+}
+#fwtTheme:hover { opacity: 1; color: var(--ink); border-color: var(--accent); }
+#fwtTheme svg {
+    width: 13px; height: 13px; display: block; fill: none; stroke: currentColor;
+    stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
