@@ -77,7 +77,6 @@
     button.primary { padding: 11px 22px; font-size: 15px; border-radius: 10px; }
     button.back-btn { border-color: transparent; background: none; color: var(--muted); }
     button.back-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
     .banner { padding: 9px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 14px;
               background: var(--approved-soft); border: 1px solid var(--approved-line); color: var(--approved); }
     .err { min-height: 0; font-size: 14px; }
@@ -237,7 +236,6 @@ function clockText(ms) {
 
 function showIntro() {
     var ready = STEPS.length > 0;
-    var timed = STEPS.filter(function (s) { return s.time_limit_hours; });
     shell(
         '<div>' +
             (JOB.team ? '<div class="eyebrow">' + esc(JOB.team) + '</div>' : '') +
@@ -248,13 +246,6 @@ function showIntro() {
         '<hr class="rule">' +
         (ready
             ? '<form id="startForm" class="form" novalidate>' +
-                '<div class="chips">' +
-                    '<span class="chip">' + STEPS.length + ' step' + (STEPS.length === 1 ? '' : 's') +
-                        UI.tip('Your progress is saved as you go.') + '</span>' +
-                    (timed.length ? '<span class="chip look">' + (timed.length === 1 ? 'One timed step' : timed.length + ' timed steps') +
-                        UI.tip(timed.map(function (s) { return s.title + ': ' + hoursText(s.time_limit_hours) + ' from when you start it'; }).join('. ') +
-                               '. You choose when to start.') + '</span>' : '') +
-                '</div>' +
                 '<div class="field"><label for="aName">Your name</label>' +
                     '<input type="text" id="aName" autocomplete="name" maxlength="200" required></div>' +
                 '<div class="field"><label for="aEmail">Email</label>' +
